@@ -20,7 +20,7 @@
       </nav>
       <div class="end">
         <button id="buildstate" class="badge" hidden></button>
-        <a class="source" href="https://github.com/konsumer/foma" target="_blank" rel="noopener">Source</a>
+        <a href="https://github.com/mlwilki/FM1-Hero" target="_blank" rel="noopener">Source</a>
       </div>
     </header>
 
@@ -42,6 +42,14 @@
         <div class="toolbar">
           <button id="reset">Restart</button>
           <button id="wipe">Forget settings</button>
+          <label
+            >Song Library
+            <select id="songlibrary">
+              <option value="">-- 163 Songs (or use SELECT knob for 16 built-in) --</option>
+            </select></label
+          >
+          <button id="loadmidbtn" class="primary">Load .MID file</button>
+          <input type="file" id="midfile" accept=".mid,.midi,audio/midi" hidden />
           <label
             >MIDI in
             <select id="midiin">

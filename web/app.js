@@ -589,3 +589,175 @@ $('check').addEventListener('click', async () => {
   }
   setBusy(false)
 })
+
+// ---------------------------------------------------------------- SMF (.mid) parser & uploader for FM1-Hero
+function parseSMF(bytes) {
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  const str4 = (o) => String.fromCharCode(bytes[o], bytes[o + 1], bytes[o + 2], bytes[o + 3])
+  if (bytes.length < 14 || str4(0) !== 'MThd') throw new Error('Not a Standard MIDI File (.mid)')
+  const hdrLen = dv.getUint32(4)
+  const ntrks = dv.getUint16(10)
+  const div = dv.getUint16(12)
+  if (div & 0x8000) throw new Error('SMPTE timecode MIDI files are not supported')
+  const tpq = div || 480
+
+  let pos = 8 + hdrLen
+  let bpm = 120
+  let gotTempo = false
+  const rawNotes = []
+
+  for (let t = 0; t < ntrks && pos + 8 <= bytes.length; t++) {
+    const id = str4(pos)
+    const len = dv.getUint32(pos + 4)
+    pos += 8
+    const end = Math.min(bytes.length, pos + len)
+    if (id !== 'MTrk') {
+      pos = end
+      continue
+    }
+    let p = pos
+    let tick = 0
+    let runSt = 0
+    const active = new Map()
+    const readVar = () => {
+      let v = 0
+      while (p < end) {
+        const b = bytes[p++]
+        v = (v << 7) | (b & 0x7f)
+        if (!(b & 0x80)) break
+      }
+      return v
+    }
+    while (p < end) {
+      tick += readVar()
+      if (p >= end) break
+      let st = bytes[p]
+      if (st & 0x80) {
+        p++
+        if (st < 0xf0) runSt = st
+      } else {
+        st = runSt
+      }
+      if (st === 0xff) {
+        const meta = bytes[p++]
+        const mlen = readVar()
+        if (meta === 0x51 && mlen === 3 && !gotTempo && p + 3 <= end) {
+          const us = (bytes[p] << 16) | (bytes[p + 1] << 8) | bytes[p + 2]
+          if (us > 0) {
+            bpm = Math.max(40, Math.min(240, Math.round(60000000 / us)))
+            gotTempo = true
+          }
+        }
+        p += mlen
+      } else if (st === 0xf0 || st === 0xf7) {
+        const slen = readVar()
+        p += slen
+      } else {
+        const cmd = st & 0xf0
+        const ch = st & 0x0f
+        const d1 = bytes[p++] & 0x7f
+        const d2 = cmd === 0xc0 || cmd === 0xd0 ? 0 : bytes[p++] & 0x7f
+        if (ch === 9) continue // skip GM percussion channel 10
+        const key = (t << 12) | (ch << 8) | d1
+        if (cmd === 0x90 && d2 > 0) {
+          if (!active.has(key)) active.set(key, tick)
+        } else if (cmd === 0x80 || (cmd === 0x90 && d2 === 0)) {
+          if (active.has(key)) {
+            const t0 = active.get(key)
+            active.delete(key)
+            rawNotes.push({ t0, dur: Math.max(1, tick - t0), note: d1, trk: t })
+          }
+        }
+      }
+    }
+    pos = end
+  }
+
+  if (!rawNotes.length) throw new Error('No playable notes found in MIDI file')
+  const noteTracks = [...new Set(rawNotes.map((n) => n.trk))].sort((a, b) => a - b)
+  const rhTrack = noteTracks[0]
+  rawNotes.sort((a, b) => a.t0 - b.t0 || a.note - b.note)
+
+  // Convert to 24 ticks per quarter note, starting from the first note
+  const firstTick = rawNotes[0].t0
+  const events = []
+  let prevT24 = 0
+  for (const n of rawNotes) {
+    if (events.length >= 512) break
+    const t24 = Math.round(((n.t0 - firstTick) * 24) / tpq)
+    const dur24 = Math.max(4, Math.min(127, Math.round((n.dur * 24) / tpq)))
+    const dt = Math.max(0, Math.min(16383, t24 - prevT24))
+    prevT24 = t24
+    const isLh = noteTracks.length > 1 ? n.trk !== rhTrack : n.note < 60
+    events.push({ dt, note: n.note & 0x7f, dur: dur24, isLh })
+  }
+  return { bpm, events }
+}
+
+async function uploadMidBuffer(buf, titleHint) {
+  try {
+    const { bpm, events } = parseSMF(buf)
+    const rawTitle = titleHint.replace(/\.(mid|midi)$/i, '').toUpperCase().replace(/[^A-Z0-9 _.+-]/g, '').trim().slice(0, 14) || 'CUSTOM .MID'
+
+    const pkts = []
+    pkts.push([0xbf, 120, Math.max(20, Math.min(120, Math.round(bpm / 2)))])
+    for (let i = 0; i < rawTitle.length; i++) pkts.push([0xbf, 123, rawTitle.charCodeAt(i) & 0x7f])
+    for (const ev of events) {
+      pkts.push([0xbf, 121, ev.dt & 0x7f])
+      if (ev.dt >= 128) pkts.push([0xbf, 122, (ev.dt >> 7) & 0x7f])
+      if (ev.isLh) pkts.push([0xbf, 125, 1])
+      pkts.push([0x9f, ev.note & 0x7f, ev.dur & 0x7f])
+    }
+    pkts.push([0xbf, 124, 1])
+
+    // Send in batches so neither the WASM MIDI queue nor USB-MIDI overflows
+    for (let i = 0; i < pkts.length; i += 40) {
+      for (const p of pkts.slice(i, i + 40)) {
+        send({ type: 'midi', data: p })
+        if (midiOut) midiOut.send(p)
+      }
+      await new Promise((r) => setTimeout(r, 8))
+    }
+    say(`Loaded "${rawTitle}" (${events.length} notes @ ${bpm} BPM, RH Green / LH Blue) into Slot 17!`)
+  } catch (err) {
+    say(`MIDI load error: ${err.message}`, true)
+  }
+}
+
+async function uploadMidFile(file) {
+  const buf = new Uint8Array(await file.arrayBuffer())
+  await uploadMidBuffer(buf, file.name)
+}
+
+fetch('songs_catalog.json')
+  .then((r) => (r.ok ? r.json() : []))
+  .then((list) => {
+    const sel = $('songlibrary')
+    if (!sel) return
+    for (const item of list) {
+      sel.add(new Option(item.title, item.file))
+    }
+    sel.addEventListener('change', async () => {
+      const url = sel.value
+      if (!url) return
+      const title = sel.options[sel.selectedIndex]?.text || url
+      const r = await fetch(url)
+      if (r.ok) await uploadMidBuffer(new Uint8Array(await r.arrayBuffer()), title)
+    })
+  })
+  .catch(() => {})
+
+$('loadmidbtn')?.addEventListener('click', () => $('midfile')?.click())
+$('midfile')?.addEventListener('change', (e) => {
+  const f = e.target.files?.[0]
+  if (f) uploadMidFile(f)
+  e.target.value = ''
+})
+addEventListener('dragover', (e) => e.preventDefault())
+addEventListener('drop', (e) => {
+  const f = e.dataTransfer?.files?.[0]
+  if (f && /\.(mid|midi)$/i.test(f.name)) {
+    e.preventDefault()
+    uploadMidFile(f)
+  }
+})

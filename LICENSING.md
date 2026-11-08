@@ -35,6 +35,8 @@ terms (FM-1 devices only), as `platform/mvave/LICENSE.md` and `platform/mvave/TH
 and `bridge.h` are foma's; `tools/mvpack.py` is a Python port of fm1_open's `sdk/Package.cs` (MIT, kagaimiq and
 M-VAVE).
 
+FM1-Hero: `src/`, `firmware.json`, and its changes to the rest, by its authors, on [foma](https://github.com/konsumer/foma).
+
 ## Third-party material
 
 | What                                                                                      | Licence     | Where                                           |

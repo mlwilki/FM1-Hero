@@ -38,7 +38,8 @@ import fm1pkg_make  # noqa: E402
 import lz4blk  # noqa: E402
 import mvpack  # noqa: E402
 
-TC = Path(os.environ.get("JIELI_TOOLCHAIN", "/opt/jieli/toolchain"))
+_default_tc = "/opt/jieli/toolchain" if Path("/opt/jieli/toolchain").exists() else str(Path.home() / ".jieli/toolchain")
+TC = Path(os.environ.get("JIELI_TOOLCHAIN", _default_tc))
 APP_XIP = 0x02000120  # app.bin offset 0 in the XIP map; the SPL jumps here
 APP_SLOT = fm1pkg_make.APP_SLOT
 LOADER_LOAD = 0x01C0A800
@@ -459,6 +460,10 @@ def build_site():
   for f in WEB.iterdir():
     if f.is_file():
       shutil.copy(f, SITE / f.name)
+    elif f.is_dir() and f.name == "songs":
+      dst = SITE / "songs"
+      if not dst.exists():
+        shutil.copytree(f, dst)
 
 
 def build():
@@ -506,7 +511,7 @@ class Quiet(SimpleHTTPRequestHandler):
 
 
 def snapshot():
-  files = [ROOT / "firmware.json", *SRC.rglob("*"), *PLAT.rglob("*"), *WEB.rglob("*")]
+  files = [ROOT / "firmware.json", *SRC.rglob("*"), *PLAT.rglob("*"), *WEB.glob("*")]
   return {str(f): f.stat().st_mtime for f in files if f.is_file()}
 
 

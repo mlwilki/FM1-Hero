@@ -12,6 +12,13 @@ set -e
 cd "$(dirname "$0")"
 IMAGE="${FOMA_IMAGE:-konsumer/foma-toolchain}"
 PORT="${PORT:-8000}"
+PATH="$HOME/.local/bin:$PATH"
+export PATH
+
+if [ -z "${JIELI_TOOLCHAIN:-}" ] && [ -x "$HOME/.jieli/toolchain/pi32v2/bin/clang" ]; then
+  JIELI_TOOLCHAIN="$HOME/.jieli/toolchain"
+  export JIELI_TOOLCHAIN
+fi
 
 image() {
   [ -f Dockerfile ] || { echo "fm1: no Dockerfile here; the image comes from Docker Hub ($IMAGE)"; exit 1; }
@@ -19,6 +26,10 @@ image() {
 }
 
 run() {
+  if [ -n "${JIELI_TOOLCHAIN:-}" ] && [ -x "$JIELI_TOOLCHAIN/pi32v2/bin/clang" ] && command -v clang >/dev/null 2>&1 && command -v wasm-ld >/dev/null 2>&1; then
+    "$@"
+    return
+  fi
   docker info >/dev/null 2>&1 || { echo "fm1: Docker is not running"; exit 1; }
   docker image inspect "$IMAGE" >/dev/null 2>&1 || docker pull --platform linux/amd64 "$IMAGE" || image
   TTY=""

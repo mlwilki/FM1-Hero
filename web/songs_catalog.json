@@ -1,0 +1,654 @@
+[
+  {
+    "title": "Mozart - Piano Sonata K.545 (Preview)",
+    "file": "songs/Mozart_Sonata.mid"
+  },
+  {
+    "title": "A Mighty Fortress is Our God",
+    "file": "songs/A_Mighty_Fortress_is_Our_God.mid"
+  },
+  {
+    "title": "A Tisket, A Tasket",
+    "file": "songs/A_Tisket_A_Tasket.mid"
+  },
+  {
+    "title": "A la Claire Fontaine",
+    "file": "songs/A_la_Claire_Fontaine.mid"
+  },
+  {
+    "title": "Alouette",
+    "file": "songs/Alouette.mid"
+  },
+  {
+    "title": "Amazing Grace",
+    "file": "songs/Amazing_Grace.mid"
+  },
+  {
+    "title": "America, the Beautiful",
+    "file": "songs/America_the_Beautiful.mid"
+  },
+  {
+    "title": "America",
+    "file": "songs/America.mid"
+  },
+  {
+    "title": "Angels We Have Heard on High",
+    "file": "songs/Angels_We_Have_Heard_on_High.mid"
+  },
+  {
+    "title": "Are You Sleeping",
+    "file": "songs/Are_You_Sleeping.mid"
+  },
+  {
+    "title": "Aria-Notebook",
+    "file": "songs/Aria-Notebook.mid"
+  },
+  {
+    "title": "Au Clair de la Lune",
+    "file": "songs/Au_Clair_de_la_Lune.mid"
+  },
+  {
+    "title": "Aupres de ma Blonde",
+    "file": "songs/Aupres_de_ma_Blonde.mid"
+  },
+  {
+    "title": "Aura Lee (Love Me Tender)",
+    "file": "songs/Aura_Lee_Love_Me_Tender_.mid"
+  },
+  {
+    "title": "Ave Maria",
+    "file": "songs/Ave_Maria.mid"
+  },
+  {
+    "title": "Away in a Manger",
+    "file": "songs/Away_in_a_Manger.mid"
+  },
+  {
+    "title": "Away in the Deep Forest",
+    "file": "songs/Away_in_the_Deep_Forest.mid"
+  },
+  {
+    "title": "Bahay Kubo My Palm Leaf Hut",
+    "file": "songs/Bahay_Kubo_My_Palm_Leaf_Hut.mid"
+  },
+  {
+    "title": "Beethoven's Fifth Symphony",
+    "file": "songs/Beethoven_s_Fifth_Symphony.mid"
+  },
+  {
+    "title": "Big Bad Goblin Blues",
+    "file": "songs/Big_Bad_Goblin_Blues.mid"
+  },
+  {
+    "title": "Bingo",
+    "file": "songs/Bingo.mid"
+  },
+  {
+    "title": "Brahms' Lullaby",
+    "file": "songs/Brahms_Lullaby.mid"
+  },
+  {
+    "title": "Bridal March",
+    "file": "songs/Bridal_March.mid"
+  },
+  {
+    "title": "Can You Plant your Cabbage So",
+    "file": "songs/Can_You_Plant_your_Cabbage_So.mid"
+  },
+  {
+    "title": "Canon in D",
+    "file": "songs/Canon_in_D.mid"
+  },
+  {
+    "title": "Carribean Cruise",
+    "file": "songs/Carribean_Cruise.mid"
+  },
+  {
+    "title": "Chinese Folk Song",
+    "file": "songs/Chinese_Folk_Song.mid"
+  },
+  {
+    "title": "Chopsticks (Short Version)",
+    "file": "songs/Chopsticks_Short_Version_.mid"
+  },
+  {
+    "title": "Chopsticks",
+    "file": "songs/Chopsticks.mid"
+  },
+  {
+    "title": "Chorale Setting in F Major",
+    "file": "songs/Chorale_Setting_in_F_Major.mid"
+  },
+  {
+    "title": "Clementi Opus 36 no 1 First Movement",
+    "file": "songs/Clementi_Opus_36_no_1_First_Movement.mid"
+  },
+  {
+    "title": "Clementine",
+    "file": "songs/Clementine.mid"
+  },
+  {
+    "title": "Cripple Creek",
+    "file": "songs/Cripple_Creek.mid"
+  },
+  {
+    "title": "Danny Boy",
+    "file": "songs/Danny_Boy.mid"
+  },
+  {
+    "title": "Do Your Ears Hang Low",
+    "file": "songs/Do_Your_Ears_Hang_Low.mid"
+  },
+  {
+    "title": "Eine kleine Nachtmusik",
+    "file": "songs/Eine_kleine_Nachtmusik.mid"
+  },
+  {
+    "title": "Evening Falls",
+    "file": "songs/Evening_Falls.mid"
+  },
+  {
+    "title": "FNaF 1",
+    "file": "songs/FNaF_1.mid"
+  },
+  {
+    "title": "FNaF 2",
+    "file": "songs/FNaF_2.mid"
+  },
+  {
+    "title": "FNaF 3",
+    "file": "songs/FNaF_3.mid"
+  },
+  {
+    "title": "FNaF 4",
+    "file": "songs/FNaF_4.mid"
+  },
+  {
+    "title": "Fais Dodo",
+    "file": "songs/Fais_Dodo.mid"
+  },
+  {
+    "title": "Five Fat Turkeys Are We",
+    "file": "songs/Five_Fat_Turkeys_Are_We.mid"
+  },
+  {
+    "title": "For Health and Strength",
+    "file": "songs/For_Health_and_Strength.mid"
+  },
+  {
+    "title": "Fur Elise",
+    "file": "songs/Fur_Elise.mid"
+  },
+  {
+    "title": "Go Tell It on the Mountain",
+    "file": "songs/Go_Tell_It_on_the_Mountain.mid"
+  },
+  {
+    "title": "God Rest Ye Merry Gentlemen",
+    "file": "songs/God_Rest_Ye_Merry_Gentlemen.mid"
+  },
+  {
+    "title": "God Save the Queen",
+    "file": "songs/God_Save_the_Queen.mid"
+  },
+  {
+    "title": "Going Home - Dvorak",
+    "file": "songs/Going_Home_-_Dvorak.mid"
+  },
+  {
+    "title": "Good King Wenceslas",
+    "file": "songs/Good_King_Wenceslas.mid"
+  },
+  {
+    "title": "Greensleeves",
+    "file": "songs/Greensleeves.mid"
+  },
+  {
+    "title": "Habanera from Carmen",
+    "file": "songs/Habanera_from_Carmen.mid"
+  },
+  {
+    "title": "Hanukkah, Hanukkah",
+    "file": "songs/Hanukkah_Hanukkah.mid"
+  },
+  {
+    "title": "Hark! The Herald Angels Sing",
+    "file": "songs/Hark_The_Herald_Angels_Sing.mid"
+  },
+  {
+    "title": "Have You Ever Thought",
+    "file": "songs/Have_You_Ever_Thought.mid"
+  },
+  {
+    "title": "Head, Shoulders, Knees and Toes",
+    "file": "songs/Head_Shoulders_Knees_and_Toes.mid"
+  },
+  {
+    "title": "Hot Cross Buns",
+    "file": "songs/Hot_Cross_Buns.mid"
+  },
+  {
+    "title": "How They Dance, Dance",
+    "file": "songs/How_They_Dance_Dance.mid"
+  },
+  {
+    "title": "I Have a Little Dreidle",
+    "file": "songs/I_Have_a_Little_Dreidle.mid"
+  },
+  {
+    "title": "I Saw Three Ships",
+    "file": "songs/I_Saw_Three_Ships.mid"
+  },
+  {
+    "title": "I've Been Working on the Railroad",
+    "file": "songs/I_ve_Been_Working_on_the_Railroad.mid"
+  },
+  {
+    "title": "In My Hot Air Balloon",
+    "file": "songs/In_My_Hot_Air_Balloon.mid"
+  },
+  {
+    "title": "In a Cabin in the Woods",
+    "file": "songs/In_a_Cabin_in_the_Woods.mid"
+  },
+  {
+    "title": "Jana-Gana-Mana",
+    "file": "songs/Jana-Gana-Mana.mid"
+  },
+  {
+    "title": "Jesu, Joy of Man's Desiring",
+    "file": "songs/Jesu_Joy_of_Man_s_Desiring.mid"
+  },
+  {
+    "title": "Jingle Bells (Short Version)",
+    "file": "songs/Jingle_Bells_Short_Version_.mid"
+  },
+  {
+    "title": "Jingle Bells",
+    "file": "songs/Jingle_Bells.mid"
+  },
+  {
+    "title": "Jolly Old Saint Nicholas",
+    "file": "songs/Jolly_Old_Saint_Nicholas.mid"
+  },
+  {
+    "title": "Joy to the World",
+    "file": "songs/Joy_to_the_World.mid"
+  },
+  {
+    "title": "La Cucaracha",
+    "file": "songs/La_Cucaracha.mid"
+  },
+  {
+    "title": "La Marseillaise",
+    "file": "songs/La_Marseillaise.mid"
+  },
+  {
+    "title": "Les Cloches (The Bells)",
+    "file": "songs/Les_Cloches_The_Bells_.mid"
+  },
+  {
+    "title": "Lightly Row",
+    "file": "songs/Lightly_Row.mid"
+  },
+  {
+    "title": "London Bridge",
+    "file": "songs/London_Bridge.mid"
+  },
+  {
+    "title": "Lupang Hinirang",
+    "file": "songs/Lupang_Hinirang.mid"
+  },
+  {
+    "title": "March on Android Moon",
+    "file": "songs/March_on_Android_Moon.mid"
+  },
+  {
+    "title": "Mary Had a Little Lamb",
+    "file": "songs/Mary_Had_a_Little_Lamb.mid"
+  },
+  {
+    "title": "Megalovania",
+    "file": "songs/Megalovania.mid"
+  },
+  {
+    "title": "Menuet (Trio), by G.F. Handel",
+    "file": "songs/Menuet_Trio_by_G.F._Handel.mid"
+  },
+  {
+    "title": "Mexican Hat Dance",
+    "file": "songs/Mexican_Hat_Dance.mid"
+  },
+  {
+    "title": "Minuet in F",
+    "file": "songs/Minuet_in_F.mid"
+  },
+  {
+    "title": "Minuet in G",
+    "file": "songs/Minuet_in_G.mid"
+  },
+  {
+    "title": "Moonlight Sonata",
+    "file": "songs/Moonlight_Sonata.mid"
+  },
+  {
+    "title": "Morning Song",
+    "file": "songs/Morning_Song.mid"
+  },
+  {
+    "title": "My Bonnie Lies Over the Ocean",
+    "file": "songs/My_Bonnie_Lies_Over_the_Ocean.mid"
+  },
+  {
+    "title": "My Grandfather's Clock",
+    "file": "songs/My_Grandfather_s_Clock.mid"
+  },
+  {
+    "title": "My Palm Leaf Hut",
+    "file": "songs/My_Palm_Leaf_Hut.mid"
+  },
+  {
+    "title": "O Canada!",
+    "file": "songs/O_Canada_.mid"
+  },
+  {
+    "title": "O Christmas Tree",
+    "file": "songs/O_Christmas_Tree.mid"
+  },
+  {
+    "title": "Ode to Joy",
+    "file": "songs/Ode_to_Joy.mid"
+  },
+  {
+    "title": "Oh Hanukah",
+    "file": "songs/Oh_Hanukah.mid"
+  },
+  {
+    "title": "Oh There Was Once a Little Ship",
+    "file": "songs/Oh_There_Was_Once_a_Little_Ship.mid"
+  },
+  {
+    "title": "Oh, When the Saints",
+    "file": "songs/Oh_When_the_Saints.mid"
+  },
+  {
+    "title": "Old MacDonald",
+    "file": "songs/Old_MacDonald.mid"
+  },
+  {
+    "title": "Once a Canadian Lad",
+    "file": "songs/Once_a_Canadian_Lad.mid"
+  },
+  {
+    "title": "Once a Small Green Mousie",
+    "file": "songs/Once_a_Small_Green_Mousie.mid"
+  },
+  {
+    "title": "Over the River and Through the Woods",
+    "file": "songs/Over_the_River_and_Through_the_Woods.mid"
+  },
+  {
+    "title": "Persian Market Monkey",
+    "file": "songs/Persian_Market_Monkey.mid"
+  },
+  {
+    "title": "Rain, Rain, Go Away",
+    "file": "songs/Rain_Rain_Go_Away.mid"
+  },
+  {
+    "title": "Rock Solid Blues",
+    "file": "songs/Rock_Solid_Blues.mid"
+  },
+  {
+    "title": "Rondino",
+    "file": "songs/Rondino.mid"
+  },
+  {
+    "title": "Row, Row, Row your Boat",
+    "file": "songs/Row_Row_Row_your_Boat.mid"
+  },
+  {
+    "title": "Russian Folksong",
+    "file": "songs/Russian_Folksong.mid"
+  },
+  {
+    "title": "See How the Night Arrives",
+    "file": "songs/See_How_the_Night_Arrives.mid"
+  },
+  {
+    "title": "Sevivon, Sov, Sov, Sov",
+    "file": "songs/Sevivon_Sov_Sov_Sov.mid"
+  },
+  {
+    "title": "Shuha D-Maryam",
+    "file": "songs/Shuha_D-Maryam.mid"
+  },
+  {
+    "title": "Silent Night",
+    "file": "songs/Silent_Night.mid"
+  },
+  {
+    "title": "Skip to my Lou",
+    "file": "songs/Skip_to_my_Lou.mid"
+  },
+  {
+    "title": "Sonatina Piccolina",
+    "file": "songs/Sonatina_Piccolina.mid"
+  },
+  {
+    "title": "Sonatina in C",
+    "file": "songs/Sonatina_in_C.mid"
+  },
+  {
+    "title": "Sonatina in G",
+    "file": "songs/Sonatina_in_G.mid"
+  },
+  {
+    "title": "Sur le Pont d'Avignon",
+    "file": "songs/Sur_le_Pont_d_Avignon.mid"
+  },
+  {
+    "title": "Surprise!",
+    "file": "songs/Surprise_.mid"
+  },
+  {
+    "title": "Swing Low, Sweet Chariot",
+    "file": "songs/Swing_Low_Sweet_Chariot.mid"
+  },
+  {
+    "title": "The Ants Go Marching",
+    "file": "songs/The_Ants_Go_Marching.mid"
+  },
+  {
+    "title": "The Barn Cat",
+    "file": "songs/The_Barn_Cat.mid"
+  },
+  {
+    "title": "The Chimes",
+    "file": "songs/The_Chimes.mid"
+  },
+  {
+    "title": "The Entertainer",
+    "file": "songs/The_Entertainer.mid"
+  },
+  {
+    "title": "The First Noel",
+    "file": "songs/The_First_Noel.mid"
+  },
+  {
+    "title": "The Four Seasons - Autumn",
+    "file": "songs/The_Four_Seasons_-_Autumn.mid"
+  },
+  {
+    "title": "The Ghost Of Tom",
+    "file": "songs/The_Ghost_Of_Tom.mid"
+  },
+  {
+    "title": "The Monkey and the Mirror",
+    "file": "songs/The_Monkey_and_the_Mirror.mid"
+  },
+  {
+    "title": "The Muffin Man",
+    "file": "songs/The_Muffin_Man.mid"
+  },
+  {
+    "title": "The Silly Seal",
+    "file": "songs/The_Silly_Seal.mid"
+  },
+  {
+    "title": "The Star-Spangled Banner",
+    "file": "songs/The_Star-Spangled_Banner.mid"
+  },
+  {
+    "title": "The Wheels on the Bus",
+    "file": "songs/The_Wheels_on_the_Bus.mid"
+  },
+  {
+    "title": "The Yellow Rose of Texas",
+    "file": "songs/The_Yellow_Rose_of_Texas.mid"
+  },
+  {
+    "title": "This Old Man",
+    "file": "songs/This_Old_Man.mid"
+  },
+  {
+    "title": "Toccata and Fugue in D minor - intro",
+    "file": "songs/Toccata_and_Fugue_in_D_minor_-_intro.mid"
+  },
+  {
+    "title": "Toreador from Carmen",
+    "file": "songs/Toreador_from_Carmen.mid"
+  },
+  {
+    "title": "Turkey in the Straw",
+    "file": "songs/Turkey_in_the_Straw.mid"
+  },
+  {
+    "title": "Twinkle, Twinkle, Little Star",
+    "file": "songs/Twinkle_Twinkle_Little_Star.mid"
+  },
+  {
+    "title": "Waltzing Matilda",
+    "file": "songs/Waltzing_Matilda.mid"
+  },
+  {
+    "title": "We Gather Together",
+    "file": "songs/We_Gather_Together.mid"
+  },
+  {
+    "title": "We Three Kings (Short Version)",
+    "file": "songs/We_Three_Kings_Short_Version_.mid"
+  },
+  {
+    "title": "We Three Kings",
+    "file": "songs/We_Three_Kings.mid"
+  },
+  {
+    "title": "We Wish You a Merry Christmas",
+    "file": "songs/We_Wish_You_a_Merry_Christmas.mid"
+  },
+  {
+    "title": "Yankee Doodle",
+    "file": "songs/Yankee_Doodle.mid"
+  },
+  {
+    "title": "Ye Knights of the Round Table",
+    "file": "songs/Ye_Knights_of_the_Round_Table.mid"
+  },
+  {
+    "title": "major arpeggios - parallel 8ve apart - 1 octave - 1st inversion - legato - simple",
+    "file": "songs/major_arpeggios_-_parallel_8ve_apart_-_1_octave_-_1st_inversion_-_legato_-_simple.mid"
+  },
+  {
+    "title": "major arpeggios - parallel 8ve apart - 1 octave - 2nd inversion - legato - simple",
+    "file": "songs/major_arpeggios_-_parallel_8ve_apart_-_1_octave_-_2nd_inversion_-_legato_-_simple.mid"
+  },
+  {
+    "title": "major arpeggios - parallel 8ve apart - 1 octave - root position - legato - simple",
+    "file": "songs/major_arpeggios_-_parallel_8ve_apart_-_1_octave_-_root_position_-_legato_-_simple.mid"
+  },
+  {
+    "title": "major arpeggios - parallel 8ve apart - 2 octaves - 1st inversion - legato - simple",
+    "file": "songs/major_arpeggios_-_parallel_8ve_apart_-_2_octaves_-_1st_inversion_-_legato_-_simple.mid"
+  },
+  {
+    "title": "major arpeggios - parallel 8ve apart - 2 octaves - 2nd inversion - legato - simple",
+    "file": "songs/major_arpeggios_-_parallel_8ve_apart_-_2_octaves_-_2nd_inversion_-_legato_-_simple.mid"
+  },
+  {
+    "title": "major arpeggios - parallel 8ve apart - 2 octaves - root position - legato - simple",
+    "file": "songs/major_arpeggios_-_parallel_8ve_apart_-_2_octaves_-_root_position_-_legato_-_simple.mid"
+  },
+  {
+    "title": "major arpeggios - parallel 8ve apart - 3 octaves - 1st inversion - legato - simple",
+    "file": "songs/major_arpeggios_-_parallel_8ve_apart_-_3_octaves_-_1st_inversion_-_legato_-_simple.mid"
+  },
+  {
+    "title": "major arpeggios - parallel 8ve apart - 3 octaves - 2nd inversion - legato - simple",
+    "file": "songs/major_arpeggios_-_parallel_8ve_apart_-_3_octaves_-_2nd_inversion_-_legato_-_simple.mid"
+  },
+  {
+    "title": "major arpeggios - parallel 8ve apart - 3 octaves - root position - legato - simple",
+    "file": "songs/major_arpeggios_-_parallel_8ve_apart_-_3_octaves_-_root_position_-_legato_-_simple.mid"
+  },
+  {
+    "title": "major arpeggios - parallel 8ve apart - 4 octaves - 1st inversion - legato - simple",
+    "file": "songs/major_arpeggios_-_parallel_8ve_apart_-_4_octaves_-_1st_inversion_-_legato_-_simple.mid"
+  },
+  {
+    "title": "major arpeggios - parallel 8ve apart - 4 octaves - 2nd inversion - legato - simple",
+    "file": "songs/major_arpeggios_-_parallel_8ve_apart_-_4_octaves_-_2nd_inversion_-_legato_-_simple.mid"
+  },
+  {
+    "title": "major arpeggios - parallel 8ve apart - 4 octaves - root position - legato - simple",
+    "file": "songs/major_arpeggios_-_parallel_8ve_apart_-_4_octaves_-_root_position_-_legato_-_simple.mid"
+  },
+  {
+    "title": "major scales - parallel 8ve apart - 1 octave - legato - simple",
+    "file": "songs/major_scales_-_parallel_8ve_apart_-_1_octave_-_legato_-_simple.mid"
+  },
+  {
+    "title": "major scales - parallel 8ve apart - 2 octaves - legato - simple",
+    "file": "songs/major_scales_-_parallel_8ve_apart_-_2_octaves_-_legato_-_simple.mid"
+  },
+  {
+    "title": "major scales - parallel 8ve apart - 3 octaves - legato - simple",
+    "file": "songs/major_scales_-_parallel_8ve_apart_-_3_octaves_-_legato_-_simple.mid"
+  },
+  {
+    "title": "major scales - parallel 8ve apart - 4 octaves - legato - simple",
+    "file": "songs/major_scales_-_parallel_8ve_apart_-_4_octaves_-_legato_-_simple.mid"
+  },
+  {
+    "title": "minor (harmonic) scales - parallel 8ve apart - 1 octave - legato - simple",
+    "file": "songs/minor_harmonic_scales_-_parallel_8ve_apart_-_1_octave_-_legato_-_simple.mid"
+  },
+  {
+    "title": "minor (harmonic) scales - parallel 8ve apart - 2 octaves - legato - simple",
+    "file": "songs/minor_harmonic_scales_-_parallel_8ve_apart_-_2_octaves_-_legato_-_simple.mid"
+  },
+  {
+    "title": "minor (harmonic) scales - parallel 8ve apart - 3 octaves - legato - simple",
+    "file": "songs/minor_harmonic_scales_-_parallel_8ve_apart_-_3_octaves_-_legato_-_simple.mid"
+  },
+  {
+    "title": "minor (harmonic) scales - parallel 8ve apart - 4 octaves - legato - simple",
+    "file": "songs/minor_harmonic_scales_-_parallel_8ve_apart_-_4_octaves_-_legato_-_simple.mid"
+  },
+  {
+    "title": "minor (melodic) scales - parallel 8ve apart - 1 octave - legato - simple",
+    "file": "songs/minor_melodic_scales_-_parallel_8ve_apart_-_1_octave_-_legato_-_simple.mid"
+  },
+  {
+    "title": "minor (melodic) scales - parallel 8ve apart - 2 octaves - legato - simple",
+    "file": "songs/minor_melodic_scales_-_parallel_8ve_apart_-_2_octaves_-_legato_-_simple.mid"
+  },
+  {
+    "title": "minor (melodic) scales - parallel 8ve apart - 3 octaves - legato - simple",
+    "file": "songs/minor_melodic_scales_-_parallel_8ve_apart_-_3_octaves_-_legato_-_simple.mid"
+  },
+  {
+    "title": "minor (melodic) scales - parallel 8ve apart - 4 octaves - legato - simple",
+    "file": "songs/minor_melodic_scales_-_parallel_8ve_apart_-_4_octaves_-_legato_-_simple.mid"
+  }
+]
