@@ -2,3 +2,6 @@ build/
 __pycache__/
 .DS_Store
 .ruff_cache/
+web/build.json
+web/firmware.wasm
+web/firmware.fwsc

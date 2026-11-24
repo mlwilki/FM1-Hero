@@ -96,13 +96,14 @@ static void midi_out_event(uint32_t pkt)            /* from the audio ISR */
 }
 
 /* ------------------------------------------------------- descriptors --- */
-/* interfaces: 0 audio control, 1 MIDI streaming, 2 audio streaming (FOMA_USB_AUDIO).
- * bcdDevice: 3.00 MIDI, 3.40 with the audio from the host (hosts cache descriptors per version; Felucca used 3.10
- * .. 3.60 for its own sets) */
-#define UAC_AS_IF 2u
+/* interfaces: 0 audio control, 1 audio streaming (FOMA_USB_AUDIO), 2 MIDI streaming (or 1 when audio is off).
+ * Audio streaming precedes MIDI (Felucca #67 / #322: macOS 13..15 show no audio device while MIDI is interface 1).
+ * bcdDevice: 3.00 MIDI, 3.C0 with the audio from the host (hosts cache descriptors per version; +0x80 for MIDI-last) */
+#define UAC_AS_IF 1u
+#define MIDI_IF (1u + FOMA_USB_AUDIO)
 #define CFG_LEN (101 + 74 * FOMA_USB_AUDIO)
 #define USB_NIF (2 + FOMA_USB_AUDIO)
-#define BCD_LO (0x40 * FOMA_USB_AUDIO)
+#define BCD_LO (0xC0 * FOMA_USB_AUDIO)
 #ifndef FELUCCA_USB_PID
 #define FELUCCA_USB_PID 0x0001   /* the update loader is 0x0002 */
 #endif
@@ -113,13 +114,20 @@ static const uint8_t CFG_DESC[] = {
     9, 2, CFG_LEN & 0xFF, CFG_LEN >> 8, USB_NIF, 1, 0, 0x80, 50,
     9, 4, 0, 0, 0, 1, 1, 0, 0,
 #if FOMA_USB_AUDIO
-    10, 0x24, 1, 0x00, 0x01, 31, 0, 2, 1, UAC_AS_IF,    /* AC header 1.00: MIDI + audio streaming */
-    12, 0x24, 2, 1, 0x01, 0x01, 0, 2, 0x03, 0x00, 0, 0, /* input terminal 1: USB streaming, 2 ch (L R) */
-    9, 0x24, 3, 2, 0x01, 0x03, 0, 1, 0,                 /* output terminal 2: speaker, from 1 */
+    10, 0x24, 1, 0x00, 0x01, 31, 0, 2, UAC_AS_IF, MIDI_IF, /* AC header 1.00: audio streaming + MIDI */
+    12, 0x24, 2, 1, 0x01, 0x01, 0, 2, 0x03, 0x00, 0, 0,    /* input terminal 1: USB streaming, 2 ch (L R) */
+    9, 0x24, 3, 2, 0x01, 0x03, 0, 1, 0,                    /* output terminal 2: speaker, from 1 */
+    9, 4, UAC_AS_IF, 0, 0, 1, 2, 0, 0,                     /* IF1 the stream, alt 0: no bandwidth */
+    9, 4, UAC_AS_IF, 1, 1, 1, 2, 0, 0,                     /* alt 1: the stream */
+    7, 0x24, 1, 1, 1, 0x01, 0x00,                          /* AS general: terminal 1, delay 1, PCM */
+    11, 0x24, 2, 1, 2, 2, 16, 1, UAC_RATE & 0xFF, (UAC_RATE >> 8) & 0xFF, UAC_RATE >> 16,
+                                                           /* type I: 2 ch, 16 bit, 44100 */
+    9, 5, 0x04, 0x09, UO_MAXP & 0xFF, UO_MAXP >> 8, 1, 0, 0, /* EP4 OUT isochronous adaptive, 1 ms */
+    7, 0x25, 1, 0x00, 0, 0, 0,                             /* CS endpoint: no controls */
 #else
-    9, 0x24, 1, 0x00, 0x01, 9, 0, 1, 1,
+    9, 0x24, 1, 0x00, 0x01, 9, 0, 1, MIDI_IF,
 #endif
-    9, 4, 1, 0, 2, 1, 3, 0, 0,
+    9, 4, MIDI_IF, 0, 2, 1, 3, 0, 0,
     7, 0x24, 1, 0x00, 0x01, 0x41, 0x00,
     6, 0x24, 2, 1, 1, 0,
     6, 0x24, 2, 2, 2, 0,
@@ -129,15 +137,6 @@ static const uint8_t CFG_DESC[] = {
     5, 0x25, 1, 1, 1,
     9, 5, 0x81, 2, 64, 0, 0, 0, 0,
     5, 0x25, 1, 1, 3,
-#if FOMA_USB_AUDIO
-    9, 4, UAC_AS_IF, 0, 0, 1, 2, 0, 0,                  /* IF2 the stream, alt 0: no bandwidth */
-    9, 4, UAC_AS_IF, 1, 1, 1, 2, 0, 0,                  /* alt 1: the stream */
-    7, 0x24, 1, 1, 1, 0x01, 0x00,                       /* AS general: terminal 1, delay 1, PCM */
-    11, 0x24, 2, 1, 2, 2, 16, 1, UAC_RATE & 0xFF, (UAC_RATE >> 8) & 0xFF, UAC_RATE >> 16,
-                                                        /* type I: 2 ch, 16 bit, 44100 */
-    9, 5, 0x04, 0x09, UO_MAXP & 0xFF, UO_MAXP >> 8, 1, 0, 0,   /* EP4 OUT isochronous adaptive, 1 ms */
-    7, 0x25, 1, 0x00, 0, 0, 0,                          /* CS endpoint: no controls */
-#endif
 };
 typedef char cfg_len_ok[sizeof CFG_DESC == CFG_LEN ? 1 : -1];
 static const uint8_t STR0[4] = {4, 3, 0x09, 0x04};

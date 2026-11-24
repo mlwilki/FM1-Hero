@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The page: the emulator (firmware.wasm in worklet.js), the installer and the rescue (fm1ota.js).
-import { productOf, logicalImage } from './fm1pkg.js'
+import { productOf, logicalImage, matchStock } from './fm1pkg.js'
 import { Updater } from './fm1ota.js'
 
 const $ = (id) => document.getElementById(id)
@@ -20,12 +20,19 @@ let build = null
 let storeKey = 'fm1-settings'
 let busy = false
 async function pollBuild() {
+  if (location.protocol === 'file:') {
+    $('pkginfo').textContent = 'Cannot load from file://. Run "./fm1 dev" and open http://localhost:8000 (or use the hosted HTTPS page).'
+    return
+  }
   let b
   try {
     const r = await fetch('build.json', { cache: 'no-store' })
-    if (!r.ok) throw new Error(r.status)
+    if (!r.ok) throw new Error(`HTTP ${r.status}`)
     b = await r.json()
-  } catch {
+  } catch (err) {
+    if (!build) {
+      $('pkginfo').textContent = `Could not load build.json (${err.message}). Run "./fm1 dev" or serve build/web/ instead of web/.`
+    }
     return
   }
   if (build && b.id === build.id) return
@@ -449,7 +456,6 @@ const TEXT = {
   mismatch: 'Written, but the FM-1 reports another identity: ',
   badreq: 'The FM-1 asked for something outside the package.'
 }
-const STOCK_SHA256 = 'db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a'
 let other = null
 let stock = null
 
@@ -564,10 +570,11 @@ $('stockfile').addEventListener('change', async (e) => {
   if (f) {
     const raw = new Uint8Array(await f.arrayBuffer())
     const hex = [...new Uint8Array(await crypto.subtle.digest('SHA-256', raw))].map((b) => b.toString(16).padStart(2, '0')).join('')
-    if (hex === STOCK_SHA256) {
+    const matched = matchStock(raw.length, hex)
+    if (matched) {
       stock = raw
-      $('stockinfo').textContent = "That is M-VAVE's FM-1 V15."
-    } else $('stockinfo').textContent = "That is not M-VAVE's FM-1 V15 file: choose the file from the link above."
+      $('stockinfo').textContent = `That is M-VAVE's FM-1 ${matched.version} (${matched.product}).`
+    } else $('stockinfo').textContent = "That is not M-VAVE's official FM-1 V15 or V16 file: choose the file from the link above."
   }
   setBusy(busy)
 })

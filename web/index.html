@@ -20,7 +20,7 @@
       </nav>
       <div class="end">
         <button id="buildstate" class="badge" hidden></button>
-        <a href="https://github.com/mlwilki/FM1-Hero" target="_blank" rel="noopener">Source</a>
+        <a class="source" href="https://github.com/mlwilki/FM1-Hero" target="_blank" rel="noopener">Source</a>
       </div>
     </header>
 
@@ -118,7 +118,7 @@
         <div class="card">
           <h2>Back to the official firmware</h2>
           <ol>
-            <li>Download M-VAVE's FM-1 V15: <a href="https://yms-file-store.oss-cn-hongkong.aliyuncs.com/software/firmware/FM-1.fwsc">FM-1.fwsc</a> (or from <a href="https://www.m-vave.com/download" target="_blank" rel="noopener">m-vave.com/download</a>).</li>
+            <li>Download M-VAVE's official FM-1 firmware (V15 or V16): <a href="https://yms-file-store.oss-cn-hongkong.aliyuncs.com/software/firmware/FM-1.fwsc">FM-1.fwsc</a> (or from <a href="https://www.m-vave.com/download" target="_blank" rel="noopener">m-vave.com/download</a>).</li>
             <li>Choose it here (it is checked before anything is written): <input type="file" id="stockfile" accept=".fwsc" /></li>
             <li>Connect the FM-1, normally or in the USB rescue, and press the button.</li>
           </ol>
@@ -129,6 +129,7 @@
           <h2>Nothing reaches it</h2>
           <p>When even the USB rescue does not start, the chip's own boot ROM still can update it, but a browser cannot talk to it (it shows up as a USB disk, which browsers may not touch). From a computer:</p>
           <ul>
+            <li><a href="https://thefirmwarehub.com/tools/rescue/" target="_blank" rel="noopener">The Firmware Hub FM-1 Rescue Guide</a>: step-by-step recovery for stuck units and newer flash chips.</li>
             <li><a href="https://github.com/charlesvestal/fm1-x0x/blob/main/tools/fm1_rescue.sh" target="_blank" rel="noopener">fm1_rescue.sh</a> (macOS): puts the official firmware back through the boot ROM.</li>
             <li><a href="https://github.com/kurogedelic/FM-1-transporter" target="_blank" rel="noopener">FM-1-transporter</a>: the protocol and tools behind it.</li>
           </ul>
