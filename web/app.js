@@ -690,7 +690,7 @@ function parseSMF(bytes) {
   const events = []
   let prevT24 = 0
   for (const n of rawNotes) {
-    if (events.length >= 512) break
+    if (events.length >= 8192) break
     const t24 = Math.round(((n.t0 - firstTick) * 24) / tpq)
     const dur24 = Math.max(4, Math.min(127, Math.round((n.dur * 24) / tpq)))
     const dt = Math.max(0, Math.min(16383, t24 - prevT24))
@@ -725,7 +725,7 @@ async function uploadMidBuffer(buf, titleHint) {
       }
       await new Promise((r) => setTimeout(r, 8))
     }
-    say(`Loaded "${rawTitle}" (${events.length} notes @ ${bpm} BPM, RH Green / LH Blue) into Slot 17!`)
+    say(`Loaded "${rawTitle}" (${events.length} notes @ ${bpm} BPM, RH Green / LH Blue) into Custom Slot!`)
   } catch (err) {
     say(`MIDI load error: ${err.message}`, true)
   }

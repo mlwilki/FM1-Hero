@@ -27,9 +27,10 @@
 
 /* ---- Constants & Limits */
 #define VOICES 6
-#define MAX_SONG_NOTES 560
-#define MAX_CUSTOM_NOTES 512
-#define TOTAL_SONGS (BUILTIN_SONG_COUNT + 1) /* 0..15 built-in, 16 = CUSTOM .MID */
+#define MAX_SONG_NOTES 8192
+#define MAX_CUSTOM_NOTES 8192
+#define FLASH_CUSTOM_NOTES 900 /* fits within 4 KiB user flash sector alongside scores/settings */
+#define TOTAL_SONGS (BUILTIN_SONG_COUNT + 1) /* 0..BUILTIN_SONG_COUNT-1 built-in, last = CUSTOM .MID */
 #define CUSTOM_SLOT BUILTIN_SONG_COUNT
 
 /* Screen Layout (240 x 240) */
@@ -80,7 +81,7 @@ enum {
 #define NF_LH      16u /* Left Hand (Blue) when set, Right Hand (Green) when clear */
 
 /* ---- Persistent Flash Storage */
-#define SAVED_MAGIC 0x53594E32u /* "SYN2" */
+#define SAVED_MAGIC 0x53594E33u /* "SYN3" */
 typedef struct {
   uint32_t magic;
   int8_t octave;
@@ -96,10 +97,13 @@ typedef struct {
   char custom_title[16];
   uint16_t custom_bpm;
   uint16_t custom_count;
-  song_ev_t custom_events[MAX_CUSTOM_NOTES];
+  song_ev_t custom_events[FLASH_CUSTOM_NOTES];
 } saved_data_t;
 
 static saved_data_t saved;
+/* Full-length custom .MID / recorded song buffer in POOL RAM (up to MAX_CUSTOM_NOTES) */
+static song_ev_t custom_events[MAX_CUSTOM_NOTES] POOL;
+static uint16_t custom_count;
 
 /* ---- Unpacked Active Song in POOL RAM */
 typedef struct {
@@ -115,7 +119,7 @@ static active_note_t song_notes[MAX_SONG_NOTES] POOL;
 static int32_t song_note_count;
 static int32_t song_total_ms;
 static uint16_t song_base_bpm = 120;
-static const char *song_title = "MEGALOVANIA";
+static const char *song_title = "COMING TO TOWN";
 
 /* ---- 6-Voice 2-Operator FM Synth + Metronome Click + Stereo Echo */
 typedef struct {
@@ -436,8 +440,8 @@ static void load_song(int idx) {
   if (idx == CUSTOM_SLOT) {
     song_title = saved.custom_title[0] ? saved.custom_title : "CUSTOM .MID";
     song_base_bpm = saved.custom_bpm ? saved.custom_bpm : 120;
-    evs = saved.custom_events;
-    cnt = saved.custom_count;
+    evs = custom_events;
+    cnt = custom_count;
   } else {
     song_title = BUILTIN_SONGS[idx].title;
     song_base_bpm = BUILTIN_SONGS[idx].bpm;
@@ -814,22 +818,22 @@ static void on_player_key_press(int k, int velocity) {
   synth_note_on(midi_note, velocity, 0);
   midi_send(0x90, (uint8_t)midi_note, (uint8_t)velocity);
 
-  if (is_recording && saved.custom_count < MAX_CUSTOM_NOTES) {
+  if (is_recording && custom_count < MAX_CUSTOM_NOTES) {
     uint32_t now = millis();
-    uint32_t dt_ms = saved.custom_count == 0 ? 0 : (now - rec_last_ms);
+    uint32_t dt_ms = custom_count == 0 ? 0 : (now - rec_last_ms);
     rec_last_ms = now;
     uint32_t dt_ticks = (dt_ms * 24u * 120u) / 60000u;
     if (dt_ticks > 480u) {
       dt_ticks = 480u;
     }
-    uint16_t idx = saved.custom_count++;
+    uint16_t idx = custom_count++;
     uint8_t raw_n = (uint8_t)(KEY_FIRST_NOTE + k);
     if (raw_n < 60) {
       raw_n |= 0x80u; /* auto-tag below Middle C as Left Hand (Blue) */
     }
-    saved.custom_events[idx].dt = (uint16_t)dt_ticks;
-    saved.custom_events[idx].note = raw_n;
-    saved.custom_events[idx].dur = 18;
+    custom_events[idx].dt = (uint16_t)dt_ticks;
+    custom_events[idx].note = raw_n;
+    custom_events[idx].dur = 18;
     hud_dirty = 1;
     return;
   }
@@ -897,7 +901,7 @@ static void handle_midi_upload(uint8_t st, uint8_t d1, uint8_t d2) {
       is_recording = 0;
       uploading_mid = 1;
       saved.custom_bpm = (uint16_t)(d2 < 15 ? 120 : d2 * 2);
-      saved.custom_count = 0;
+      custom_count = 0;
       upload_dt_acc = 0;
       upload_hand_lh = 0;
       upload_title_len = 0;
@@ -929,13 +933,13 @@ static void handle_midi_upload(uint8_t st, uint8_t d1, uint8_t d2) {
       print("Loaded .MID song into Custom Slot!");
     }
   } else if (st == 0x9F && uploading_mid && d2 > 0) {
-    if (saved.custom_count < MAX_CUSTOM_NOTES) {
-      uint16_t idx = saved.custom_count++;
+    if (custom_count < MAX_CUSTOM_NOTES) {
+      uint16_t idx = custom_count++;
       uint8_t n = fold_note_to_fm1(d1);
       uint8_t lh = upload_hand_lh ? 0x80u : (d1 < 60 ? 0x80u : 0u);
-      saved.custom_events[idx].dt = upload_dt_acc;
-      saved.custom_events[idx].note = (uint8_t)(n | lh);
-      saved.custom_events[idx].dur = d2;
+      custom_events[idx].dt = upload_dt_acc;
+      custom_events[idx].note = (uint8_t)(n | lh);
+      custom_events[idx].dur = d2;
       upload_dt_acc = 0;
       upload_hand_lh = 0;
     }
@@ -957,10 +961,12 @@ static void init_default_custom_song(void) {
   str_cat(saved.custom_title, "TWINKLE STAR");
   saved.custom_bpm = 116;
   saved.custom_count = 14;
+  custom_count = 14;
   for (int i = 0; i < 14; i++) {
     saved.custom_events[i].dt = i == 0 ? 0 : (i == 7 ? 48 : 24);
     saved.custom_events[i].note = N[i];
     saved.custom_events[i].dur = (i == 6 || i == 13) ? 44 : 20;
+    custom_events[i] = saved.custom_events[i];
   }
 }
 
@@ -978,6 +984,11 @@ void setup(void) {
     saved.fm_bright = 68;
     saved.echo_mix = 32;
     init_default_custom_song();
+  } else {
+    custom_count = saved.custom_count > FLASH_CUSTOM_NOTES ? FLASH_CUSTOM_NOTES : saved.custom_count;
+    for (uint16_t i = 0; i < custom_count; i++) {
+      custom_events[i] = saved.custom_events[i];
+    }
   }
   if (saved.speed_pct < 25 || saved.speed_pct > 200) {
     saved.speed_pct = 100;
@@ -990,7 +1001,7 @@ void setup(void) {
   load_song(saved.song_idx);
   is_playing = 1;
   last_frame_ms = millis();
-  print("FM1-Hero Ready! 16 built-in songs + 163-song web library.");
+  print("FM1-Hero Xmas Ready! 7 full-length Xmas songs + full-length .MID upload.");
 }
 
 void loop(void) {
@@ -1100,7 +1111,7 @@ void loop(void) {
       is_playing = 0;
       synth_all_off();
       saved.song_idx = CUSTOM_SLOT;
-      saved.custom_count = 0;
+      custom_count = 0;
       saved.custom_bpm = 120;
       for (int i = 0; i < 16; i++) {
         saved.custom_title[i] = 0;
@@ -1115,6 +1126,10 @@ void loop(void) {
   }
   if (button_pressed(BTN_SAVE)) {
     synth_all_off();
+    saved.custom_count = custom_count > FLASH_CUSTOM_NOTES ? FLASH_CUSTOM_NOTES : custom_count;
+    for (uint16_t i = 0; i < saved.custom_count; i++) {
+      saved.custom_events[i] = custom_events[i];
+    }
     settings_save(&saved, sizeof saved);
     print("Saved scores, settings & custom .MID to flash.");
   }
