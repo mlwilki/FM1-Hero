@@ -2,6 +2,8 @@
 
 ![FM1-Hero Screenshot](docs/card.png)
 
+Install From https://mlwilki.github.io/FM1-Hero/ 
+
 **FM1-Hero** is a falling-note MIDI piano trainer, rhythm game, and 6-voice 2-operator FM synthesizer for the **M-VAVE FM-1**, built with [foma](https://github.com/konsumer/foma).
 
 Play along with falling **Green (Right Hand)** and **Blue (Left Hand)** note bars on the 240×240 screen while the physical keybed LEDs light up the next notes to press.
