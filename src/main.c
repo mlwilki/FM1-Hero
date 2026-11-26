@@ -1343,7 +1343,6 @@ static void draw_keyboard(uint32_t held_mask, uint32_t rh_cue, uint32_t lh_cue) 
   rect(0, KB_Y, SCREEN_W, KB_WHITE_H, BLACK);
 
   uint16_t w_top = (theme == THEME_MEDIEVAL || theme == THEME_MANDALA) ? RGB(218, 190, 142) : theme == THEME_GROOVY ? RGB(204, 164, 108) : theme == THEME_CYBER ? RGB(150, 162, 188) : C_KEY_W_TOP;
-  uint16_t w_mid = (theme == THEME_MEDIEVAL || theme == THEME_MANDALA) ? RGB(190, 158, 110) : theme == THEME_GROOVY ? RGB(164, 124, 76)  : theme == THEME_CYBER ? RGB(114, 126, 154) : C_KEY_W_MID;
   uint16_t w_bot = (theme == THEME_MEDIEVAL || theme == THEME_MANDALA) ? RGB(144, 114, 74)  : theme == THEME_GROOVY ? RGB(110, 76, 44)   : theme == THEME_CYBER ? RGB(74, 84, 108)   : C_KEY_W_BOT;
 
   /* 16 White keys */
@@ -1368,8 +1367,7 @@ static void draw_keyboard(uint32_t held_mask, uint32_t rh_cue, uint32_t lh_cue) 
         rect(x, KB_Y + 10, w, KB_WHITE_H - 14, rc ? C_RH_EDGE : C_LH_EDGE);
         rect(x, KB_Y + KB_WHITE_H - 4, w, 4, rc ? C_RH_CORE : C_LH_CORE);
       } else {
-        rect(x, KB_Y, w, 18, w_top);
-        rect(x, KB_Y + 18, w, KB_WHITE_H - 22, w_mid);
+        rect(x, KB_Y, w, KB_WHITE_H - 4, w_top);
         rect(x, KB_Y + KB_WHITE_H - 4, w, 4, w_bot);
       }
     }
