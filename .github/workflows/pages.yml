@@ -20,12 +20,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
-        if: github.event_name != 'pull_request'
+        if: github.ref == 'refs/heads/main'
         with:
           enablement: true
       - run: ./fm1 build
       - uses: actions/upload-pages-artifact@v3
-        if: github.event_name != 'pull_request'
+        if: github.ref == 'refs/heads/main'
         with:
           path: build/web
       - uses: softprops/action-gh-release@v2
@@ -34,7 +34,7 @@ jobs:
           files: build/*.fwsc
   deploy:
     needs: build
-    if: github.event_name != 'pull_request'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
