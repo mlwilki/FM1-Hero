@@ -3,7 +3,8 @@
   "author": "mlwilki",
   "kinds": ["other"],
   "play": "https://mlwilki.github.io/FM1-Hero/#emulator",
+  "video": "https://youtu.be/N7tNz_kmL0c",
   "image": "docs/card.png",
   "color": "#6EE42A",
-  "sounds": "none" 
+  "sounds": "none"
 }
