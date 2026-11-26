@@ -200,6 +200,7 @@ static void screen_flush(void) {
     int h = fb_y1 - y > 64 ? 64 : fb_y1 - y;
     lcd_blit(0, (uint32_t)y, SCREEN_W, (uint32_t)h, fb + y * SCREEN_W);
   }
+  lcd_sync(); /* finish last strip DMA before loop() writes fb again */
   fb_y0 = SCREEN_H;
   fb_y1 = 0;
 }
