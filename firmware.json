@@ -1,7 +1,7 @@
 {
   "name": "FM1-HERO",
-  "version": "0.1",
-  "identity": "FM-1_28",
+  "version": "0.1.2",
+  "identity": "FM-1_281",
   "options": {
     "usb_audio": true,
     "trs_midi": true,
