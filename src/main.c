@@ -33,18 +33,15 @@
 #define TOTAL_SONGS (BUILTIN_SONG_COUNT + 1) /* 0..BUILTIN_SONG_COUNT-1 built-in, last = CUSTOM .MID */
 #define CUSTOM_SLOT BUILTIN_SONG_COUNT
 
-/* Screen Layout (240 x 240) */
-#define TIMELINE_H 4
-#define HUD_Y 4
-#define HUD_H 30
-#define HWY_Y0 34
-#define HWY_Y1 177
-#define HWY_H (HWY_Y1 - HWY_Y0) /* 143 px falling-note highway */
-#define FELT_Y 177              /* 3 px crimson keyboard felt strip above keys */
-#define KB_Y 180
-#define KB_WHITE_H 40
-#define KB_BLACK_H 24
-#define BOT_Y 221
+/* Screen Layout (240 x 240 — Full-Screen Keysight Layout, zero permanent bars) */
+#define TIMELINE_H 2
+#define HWY_Y0 2
+#define HWY_Y1 188
+#define HWY_H (HWY_Y1 - HWY_Y0) /* 186 px edge-to-edge falling-note highway */
+#define FELT_Y 188              /* 3 px luminous strike bar above keys */
+#define KB_Y 191
+#define KB_WHITE_H 49           /* flush to bottom edge (191 + 49 = 240) */
+#define KB_BLACK_H 30
 #define LOOKAHEAD_MS 2200
 
 /* Practice & Game Modes */
@@ -53,6 +50,21 @@ enum {
   MODE_GAME = 1, /* Rhythm Practice / Recital */
   MODE_AUTO = 2, /* Watch and Listen */
   MODE_COUNT = 3
+};
+
+/* 10 Waterfall Visual Themes */
+enum {
+  THEME_SPACE = 0,    /* 1. Outer Space: Galaxy + Comets + Supernova Flash */
+  THEME_CARTOON = 1,  /* 2. Cartoon: Sky & Clouds + Inked Jelly Notes + POW! */
+  THEME_CYBER = 2,    /* 3. Cyberpunk / Neon: Synthwave Grid + Laser Trails + Glitch */
+  THEME_MEDIEVAL = 3, /* 4. Medieval / Fantasy: Castle Bricks + Swords/Scrolls + Runes */
+  THEME_ARCADE = 4,   /* 5. Retro / Arcade: Magenta Wireframe + Gems/Bricks + Pixel Boom */
+  THEME_TIEDYE = 5,   /* 6. Tie-Dye / Blacklight: Psychedelic Swirl + Rainbow Notes + Peace */
+  THEME_LAVA = 6,     /* 7. Lava Lamp: Rising Bubbles + Glossy Blobs + Liquid Splash */
+  THEME_FLOWER = 7,   /* 8. Flower Power: Retro Forest + Daisy Notes + Blossom Burst */
+  THEME_MANDALA = 8,  /* 9. Cosmic Mandala: Sacred Geometry + Prismatic Crystals + Rings */
+  THEME_GROOVY = 9,   /* 10. 70s Groovy: Vintage Stripes + Retro Pills + Golden Flare */
+  THEME_COUNT = 10
 };
 
 /* Hand Practice Selection (RH / LH split) */
@@ -93,6 +105,7 @@ typedef struct {
   uint8_t speed_pct; /* 25..200 */
   uint8_t fm_bright; /* 0..127 */
   uint8_t echo_mix;  /* 0..127 */
+  uint8_t theme;     /* 0..THEME_COUNT-1 (fits in alignment padding) */
   uint32_t high_score[TOTAL_SONGS];
   char custom_title[16];
   uint16_t custom_bpm;
@@ -366,6 +379,7 @@ static void synth_all_off(void) {
 
 /* ---- Game & Sequencer State */
 static int32_t song_pos_ms;
+static uint32_t song_frac_acc;
 static uint8_t is_playing;
 static uint8_t is_finished;
 static uint8_t is_recording;
@@ -383,8 +397,47 @@ static uint16_t hits_perfect;
 static uint16_t hits_good;
 static uint16_t hits_missed;
 static uint8_t last_judge;
+static uint32_t judge_start_ms;
 static uint32_t judge_until_ms;
 static int32_t last_metro_beat = -1;
+
+/* ---- Lightweight Zero-Allocation Keysight FX & GLO Menu State (Pure Integer) */
+#define SPARK_MAX 48
+typedef struct {
+  int16_t x8;
+  int16_t y8;
+  int16_t vx8;
+  int16_t vy8;
+  uint16_t col_hot;
+  uint16_t col_mid;
+  uint8_t life;
+  uint8_t max_life;
+} spark_t;
+
+static spark_t sparks[SPARK_MAX];
+static uint8_t lane_flash_ms[KEY_COUNT]; /* 0..200 ms strike bloom & rising light plume */
+static uint8_t lane_flash_lh[KEY_COUNT];
+static uint32_t cur_held_mask;
+static uint32_t combo_pop_until_ms;
+static uint32_t finish_start_ms;
+
+/* GLO Modal Menu Window */
+#define MENU_ITEMS 10
+static uint8_t menu_open;
+static uint8_t menu_cursor;
+static uint32_t menu_open_ms;
+
+/* Knob / parameter pill popup (1.2s auto-dismiss) */
+static uint32_t popup_start_ms;
+static uint32_t popup_end_ms;
+static uint16_t popup_col;
+static uint8_t popup_pct;
+static char popup_label[12];
+static char popup_val[14];
+
+/* Song browser drawer (1.5s auto-dismiss on SELECT/PRESETS turn) */
+static uint32_t browser_start_ms;
+static uint32_t browser_until_ms;
 
 /* MIDI Channel 16 (.mid upload) state */
 static uint16_t upload_dt_acc;
@@ -477,6 +530,7 @@ static void load_song(int idx) {
   song_note_count = cnt;
   song_total_ms = end_ms + 800;
   song_pos_ms = -800;
+  song_frac_acc = 0;
   last_metro_beat = -1;
   loop_state = 0;
   is_finished = 0;
@@ -497,46 +551,170 @@ static void restart_song(void) {
   is_playing = 1;
 }
 
-/* ---- Highway & Keyboard Color Palette */
-#define C_SYN_BG       RGB(48, 48, 48)    /* screenBackground: rgb(48, 48, 48) */
-#define C_SYN_HEADER   RGB(16, 122, 181)  /* header: hsv(200, 91, 71) */
-#define C_SYN_HDR_DK   RGB(10, 82, 125)
-#define C_SYN_TIMELINE RGB(0, 165, 0)     /* timelineFilled: rgb(0, 145, 0) */
-#define C_SYN_TIME_BG  RGB(32, 32, 32)    /* timelineEmpty */
-#define C_SYN_LOOP     RGB(240, 130, 15)  /* timelineLoop: hsv(30, 100, 94) */
-#define C_SYN_GUIDE_C  RGB(92, 92, 92)    /* fallingNoteGuide: rgb(90, 90, 90) */
-#define C_SYN_GUIDE_F  RGB(64, 64, 64)    /* fallingNoteGuideAlt: rgb(60, 60, 60) */
-#define C_SYN_MEASURE  RGB(68, 68, 68)    /* fallingMeasureLine */
-#define C_SYN_FELT     RGB(165, 32, 32)   /* keyboardFelt: hsv(0, 80, 63) */
-#define C_SYN_WHITE_K  RGB(252, 250, 238) /* keyboardWhiteKeys: hsv(54, 6, 100) */
+/* ---- Keysight Neon-on-Void Palette (RGB565) */
+#define C_BG_VOID      RGB(5, 7, 12)      /* #05070C deep Keysight void */
+#define C_SURF_RECESS  RGB(15, 19, 30)    /* #0F131E modal menu recessed header */
+#define C_SURF_ELEV    RGB(22, 28, 42)    /* #161C2A modal menu card */
+#define C_OUTLINE_IDLE RGB(46, 54, 70)    /* #2E3646 crisp idle border */
+#define C_FM1_ORANGE   RGB(255, 136, 28)  /* #FF881C warm amber/orange accent */
+#define C_GOLD         RGB(255, 220, 72)  /* #FFDC48 S-rank / combos / wait */
+#define C_CRIMSON      RGB(245, 66, 78)   /* #F5424E REC / MISS */
+#define C_TEXT_PRI     RGB(243, 245, 248) /* #F3F5F8 primary text */
+#define C_TEXT_DIM     RGB(148, 160, 178) /* #94A0B2 muted text */
 
-/* Right Hand (Green) & Left Hand (Blue) Note Bars */
-#define C_RH_WHITE     RGB(110, 228, 42)
-#define C_RH_WHITE_HI  RGB(200, 255, 155)
-#define C_RH_BLACK     RGB(66, 164, 18)
-#define C_RH_BLACK_HI  RGB(140, 220, 85)
+/* Subtle Highway Guides */
+#define C_GUIDE_C      RGB(24, 32, 46)
+#define C_GUIDE_F      RGB(14, 19, 28)
+#define C_MEASURE      RGB(18, 24, 36)
 
-#define C_LH_WHITE     RGB(52, 168, 250)
-#define C_LH_WHITE_HI  RGB(160, 220, 255)
-#define C_LH_BLACK     RGB(26, 110, 198)
-#define C_LH_BLACK_HI  RGB(100, 175, 240)
+/* Right Hand (Vibrant Neon Green / Emerald) */
+#define C_RH_GLOW_DIM  RGB(8, 28, 14)
+#define C_RH_CORE      RGB(16, 62, 26)
+#define C_RH_CORE_B    RGB(10, 44, 18)
+#define C_RH_EDGE      RGB(58, 242, 108)  /* luminous neon green */
+#define C_RH_HOT       RGB(205, 255, 215) /* white-hot specular */
 
-#define C_WAIT_PULSE   RGB(255, 215, 40)
-#define C_HIT_GLOW     RGB(160, 255, 110)
-#define C_MISS_BAR     RGB(130, 50, 55)
-#define C_BOT_BG       RGB(28, 32, 38)
-#define C_DIM          RGB(165, 175, 185)
+/* Left Hand (Vibrant Electric Cyan / Azure) */
+#define C_LH_GLOW_DIM  RGB(6, 22, 38)
+#define C_LH_CORE      RGB(12, 52, 86)
+#define C_LH_CORE_B    RGB(8, 36, 64)
+#define C_LH_EDGE      RGB(36, 208, 255)  /* luminous electric cyan */
+#define C_LH_HOT       RGB(195, 244, 255) /* white-hot specular */
+
+/* Keybed Surfaces */
+#define C_KEY_W_TOP    RGB(232, 236, 244)
+#define C_KEY_W_MID    RGB(210, 216, 228)
+#define C_KEY_W_BOT    RGB(168, 176, 192)
+#define C_KEY_B_BODY   RGB(16, 20, 28)
+#define C_KEY_B_HI     RGB(54, 64, 84)
+#define C_MISS_CORE    RGB(56, 16, 20)
+#define C_MISS_EDGE    RGB(195, 56, 68)
+
+/* ---- Fixed-Point Animation & UI Primitives (No FPU) */
+static int32_t ease_out_quad(int32_t t, int32_t dur) {
+  if (t <= 0 || dur <= 0) {
+    return 0;
+  }
+  if (t >= dur) {
+    return 256;
+  }
+  int32_t u = (t * 256) / dur;
+  int32_t inv = 256 - u;
+  return 256 - ((inv * inv) >> 8);
+}
+
+static void draw_outlined_box(int x, int y, int w, int h, uint16_t bg, uint16_t border, uint16_t corner) {
+  rect(x, y, w, h, bg);
+  frame(x, y, w, h, border);
+  rect(x, y, 3, 1, corner);
+  rect(x, y, 1, 3, corner);
+  rect(x + w - 3, y, 3, 1, corner);
+  rect(x + w - 1, y, 1, 3, corner);
+  rect(x, y + h - 1, 3, 1, corner);
+  rect(x, y + h - 3, 1, 3, corner);
+  rect(x + w - 3, y + h - 1, 3, 1, corner);
+  rect(x + w - 1, y + h - 3, 1, 3, corner);
+}
+
+static void str_copy_lim(char *dst, const char *src, int max_len) {
+  int i = 0;
+  while (src[i] && i < max_len - 1) {
+    dst[i] = src[i];
+    i++;
+  }
+  dst[i] = 0;
+}
+
+static void trigger_popup(const char *label, const char *val, uint8_t pct, uint16_t col) {
+  uint32_t now = millis();
+  str_copy_lim(popup_label, label, sizeof popup_label);
+  str_copy_lim(popup_val, val, sizeof popup_val);
+  popup_pct = pct > 100 ? 100 : pct;
+  popup_col = col;
+  if (now >= popup_end_ms) {
+    popup_start_ms = now;
+  } else if (now > popup_start_ms + 120u) {
+    popup_start_ms = now - 120u;
+  }
+  popup_end_ms = now + 1200u;
+}
+
+static void spawn_sparks(int k, int is_lh, int count, int boost) {
+  if (k < 0 || k >= KEY_COUNT) {
+    return;
+  }
+  int cx = key_x[k] + (key_w[k] >> 1);
+  uint16_t hot = boost ? C_GOLD : (is_lh ? C_LH_HOT : C_RH_HOT);
+  uint16_t mid = is_lh ? C_LH_EDGE : C_RH_EDGE;
+  int spawned = 0;
+  for (int i = 0; i < SPARK_MAX && spawned < count; i++) {
+    if (sparks[i].life == 0) {
+      uint32_t r = random32();
+      int ox = (int)((r & 7u)) - 3;
+      sparks[i].x8 = (int16_t)((cx + ox) << 8);
+      sparks[i].y8 = (int16_t)((FELT_Y - 1) << 8);
+      sparks[i].vx8 = (int16_t)(((int32_t)((r >> 3) & 0xFFu) - 128) * 3);
+      sparks[i].vy8 = (int16_t)(-300 - (int32_t)((r >> 11) & 0xFFu) * 3);
+      sparks[i].col_hot = (spawned == 0) ? WHITE : hot;
+      sparks[i].col_mid = mid;
+      uint8_t lf = (uint8_t)(10u + ((r >> 19) & 7u));
+      sparks[i].life = lf;
+      sparks[i].max_life = lf;
+      spawned++;
+    }
+  }
+}
+
+static void trigger_hit_fx(int k, int is_lh, uint8_t judge) {
+  if (k < 0 || k >= KEY_COUNT) {
+    return;
+  }
+  lane_flash_ms[k] = 200u;
+  lane_flash_lh[k] = (uint8_t)is_lh;
+  spawn_sparks(k, is_lh, 6, judge == JUDGE_PERFECT);
+}
+
+static void update_fx(uint32_t dt_ms) {
+  for (int k = 0; k < KEY_COUNT; k++) {
+    if ((cur_held_mask >> k) & 1u) {
+      /* Keep a steady luminous plume while key is held */
+      if (lane_flash_ms[k] < 110u) {
+        lane_flash_ms[k] = 110u;
+      }
+      if ((random32() & 7u) == 0u) {
+        spawn_sparks(k, lane_flash_lh[k], 1, 0);
+      }
+    } else if (lane_flash_ms[k] > dt_ms) {
+      lane_flash_ms[k] = (uint8_t)(lane_flash_ms[k] - dt_ms);
+    } else {
+      lane_flash_ms[k] = 0;
+    }
+  }
+  for (int i = 0; i < SPARK_MAX; i++) {
+    if (sparks[i].life) {
+      sparks[i].x8 = (int16_t)(sparks[i].x8 + sparks[i].vx8);
+      sparks[i].y8 = (int16_t)(sparks[i].y8 + sparks[i].vy8);
+      /* Keysight upward float + gentle drag */
+      sparks[i].vx8 = (int16_t)((sparks[i].vx8 * 15) >> 4);
+      sparks[i].vy8 = (int16_t)((sparks[i].vy8 * 15) >> 4);
+      sparks[i].life--;
+    }
+  }
+}
 
 /* ---- Drawing Functions */
 static void draw_timeline(void) {
-  rect(0, 0, SCREEN_W, TIMELINE_H, C_SYN_TIME_BG);
+  rect(0, 0, SCREEN_W, TIMELINE_H, RGB(12, 16, 24));
   if (song_total_ms > 0 && song_pos_ms > 0) {
     int pw = (int)((song_pos_ms * SCREEN_W) / song_total_ms);
     if (pw > SCREEN_W) {
       pw = SCREEN_W;
     }
     if (pw > 0) {
-      rect(0, 0, pw, TIMELINE_H, C_SYN_TIMELINE);
+      rect(0, 0, pw, TIMELINE_H, C_RH_EDGE);
+      if (pw >= 2) {
+        rect(pw - 2, 0, 2, TIMELINE_H, WHITE);
+      }
     }
   }
   if (loop_state >= 1 && song_total_ms > 0) {
@@ -549,104 +727,624 @@ static void draw_timeline(void) {
       xb = SCREEN_W;
     }
     if (xb > xa) {
-      rect(xa, 0, xb - xa, TIMELINE_H, C_SYN_LOOP);
+      rect(xa, 0, xb - xa, TIMELINE_H, C_FM1_ORANGE);
     }
   }
 }
 
-static void draw_hud(void) {
-  static const char *const MODE_NAMES[MODE_COUNT] = {"WAIT", "GAME", "AUTO"};
-  static const char *const HAND_NAMES[HAND_COUNT] = {"BOTH", "RH", "LH"};
+/* ---- 5-Theme Procedural Waterfall, Impact & Keyboard Renderers (Pure Integer) */
+static const char *const THEME_SHORT[THEME_COUNT] = {
+  "SPACE", "CARTOON", "CYBER", "FANTASY", "ARCADE",
+  "TIEDYE", "LAVA", "FLOWER", "MANDALA", "70S"
+};
 
-  draw_timeline();
-  rect(0, HUD_Y, SCREEN_W, HUD_H, C_SYN_HEADER);
-  rect(0, HUD_Y + HUD_H - 1, SCREEN_W, 1, C_SYN_HDR_DK);
-
-  /* Row 1: Song # + Title + Hand & Mode badges */
-  char line1[28];
-  char *p = line1;
-  p = str_cat_int(p, saved.song_idx + 1);
-  p = str_cat(p, ".");
-  p = str_cat(p, song_title);
-  text(4, HUD_Y + 1, line1, WHITE, FONT_SMALL);
-
-  char badge[16];
-  if (is_recording) {
-    str_cat(badge, "REC");
-  } else {
-    p = str_cat(badge, HAND_NAMES[saved.hand % HAND_COUNT]);
-    p = str_cat(p, " ");
-    str_cat(p, MODE_NAMES[saved.mode % MODE_COUNT]);
+static uint16_t theme_accent_col(void) {
+  switch (saved.theme % THEME_COUNT) {
+    case THEME_SPACE:    return C_LH_EDGE;
+    case THEME_CARTOON:  return C_GOLD;
+    case THEME_CYBER:    return RGB(255, 48, 210);
+    case THEME_MEDIEVAL: return C_FM1_ORANGE;
+    case THEME_ARCADE:   return RGB(190, 56, 255);
+    case THEME_TIEDYE:   return RGB(255, 64, 210);
+    case THEME_LAVA:     return RGB(140, 255, 48);
+    case THEME_FLOWER:   return RGB(96, 232, 112);
+    case THEME_MANDALA:  return RGB(178, 108, 255);
+    case THEME_GROOVY:   return RGB(242, 168, 42);
+    default:             return C_FM1_ORANGE;
   }
-  int bw = text_width(badge, FONT_SMALL) + 6;
-  rect(SCREEN_W - bw - 3, HUD_Y + 1, bw, 14, C_SYN_HDR_DK);
-  text(SCREEN_W - bw, HUD_Y + 1, badge, is_recording ? RGB(255, 90, 90) : C_WAIT_PULSE, FONT_SMALL);
+}
 
-  /* Row 2: Score + Combo + Live Judgement */
-  char line2[28];
-  p = str_cat(line2, "PTS ");
-  p = str_cat_int(p, (int32_t)score);
-  if (combo > 1) {
-    p = str_cat(p, " x");
-    p = str_cat_int(p, combo);
+/* Deterministic 32-starfield for Outer Space */
+static const uint8_t STAR_X[32] = {
+  14, 38, 62, 88, 118, 146, 174, 206, 228, 22, 54, 78, 108, 134, 166, 198,
+  218, 10, 44, 72, 98, 128, 158, 186, 212, 30, 66, 94, 124, 152, 182, 224
+};
+static const uint8_t STAR_Y[32] = {
+  12, 28, 16, 42, 20, 36, 14, 32, 48, 64, 52, 74, 60, 82, 56, 72,
+  92, 108, 96, 118, 104, 126, 98, 114, 134, 148, 138, 160, 144, 166, 152, 172
+};
+
+static void draw_bg_space(uint32_t now) {
+  rect(0, HWY_Y0, SCREEN_W, HWY_H, RGB(7, 5, 20));
+  /* Diagonal cosmic nebula bands */
+  for (int band = 0; band < 18; band++) {
+    int y = HWY_Y0 + band * 10;
+    int nx = 180 - band * 9;
+    if (nx < 0) nx = 0;
+    int nw = 68;
+    if (nx + nw > SCREEN_W) nw = SCREEN_W - nx;
+    rect(nx, y, nw, 10, (band & 1) ? RGB(20, 10, 42) : RGB(28, 12, 50));
+    if (nx + 14 < SCREEN_W) {
+      int iw = nw > 28 ? nw - 28 : 8;
+      rect(nx + 14, y + 2, iw, 6, (band & 1) ? RGB(42, 16, 68) : RGB(18, 28, 62));
+    }
   }
-  text(4, HUD_Y + 15, line2, WHITE, FONT_SMALL);
+  /* Subtle lane guides */
+  for (int k = 0; k < KEY_COUNT; k++) {
+    int semi = k % 12;
+    if (semi == 7) rect(key_x[k] - 1, HWY_Y0, 1, HWY_H, RGB(26, 24, 52));
+  }
+  /* Twinkling stars */
+  uint32_t tw = now >> 8;
+  for (int i = 0; i < 32; i++) {
+    int sx = STAR_X[i];
+    int sy = STAR_Y[i];
+    uint16_t sc = ((i + tw) & 3u) == 0 ? WHITE : ((i & 1) ? RGB(140, 180, 255) : RGB(200, 150, 255));
+    pixel(sx, sy, sc);
+    if ((i & 7) == 0 && ((i + tw) & 1u)) {
+      pixel(sx - 1, sy, RGB(80, 110, 190));
+      pixel(sx + 1, sy, RGB(80, 110, 190));
+      pixel(sx, sy - 1, RGB(80, 110, 190));
+      pixel(sx, sy + 1, RGB(80, 110, 190));
+    }
+  }
+}
 
-  const char *jstr = "";
-  uint16_t jcol = WHITE;
-  if (is_recording) {
-    char rbuf[20];
-    str_cat_int(str_cat(rbuf, "NOTES:"), saved.custom_count);
-    text(SCREEN_W - text_width(rbuf, FONT_SMALL) - 4, HUD_Y + 15, rbuf, C_WAIT_PULSE, FONT_SMALL);
+static void draw_bg_cartoon(uint32_t now) {
+  /* Bright sky gradient */
+  rect(0, HWY_Y0, SCREEN_W, 64, RGB(135, 218, 246));
+  rect(0, HWY_Y0 + 64, SCREEN_W, 66, RGB(172, 232, 250));
+  rect(0, HWY_Y0 + 130, SCREEN_W, HWY_H - 130, RGB(206, 244, 252));
+  /* Soft drifting fluffy clouds */
+  int drift = (int)((now >> 6) % 240u);
+  for (int c = 0; c < 4; c++) {
+    int cx = ((c * 68 + drift) % 270) - 30;
+    int cy = 22 + c * 32;
+    int cw = 36 + (c & 1) * 12;
+    if (cx + cw > 0 && cx < SCREEN_W) {
+      int x0 = cx < 0 ? 0 : cx;
+      int w0 = (cx + cw > SCREEN_W ? SCREEN_W : cx + cw) - x0;
+      rect(x0, cy + 4, w0, 10, WHITE);
+      if (w0 > 8) rect(x0 + 4, cy, w0 - 8, 6, WHITE);
+      rect(x0, cy + 12, w0, 2, RGB(214, 236, 246));
+    }
+  }
+  /* Green cartoon hills at bottom above keys */
+  rect(0, HWY_Y1 - 16, SCREEN_W, 16, RGB(118, 206, 86));
+  rect(0, HWY_Y1 - 17, SCREEN_W, 1, RGB(52, 116, 42));
+  /* Subtle vertical guides */
+  for (int k = 0; k < KEY_COUNT; k++) {
+    if ((k % 12) == 7) rect(key_x[k] - 1, HWY_Y0, 1, HWY_H, RGB(110, 180, 204));
+  }
+}
+
+static void draw_bg_cyber(void) {
+  rect(0, HWY_Y0, SCREEN_W, HWY_H, RGB(7, 5, 22));
+  /* Subtle horizontal scanlines */
+  for (int y = HWY_Y0; y < HWY_Y1; y += 6) {
+    rect(0, y, SCREEN_W, 1, RGB(14, 10, 38));
+  }
+  /* Dark cyberpunk skyline silhouettes */
+  static const uint8_t BLD_H[12] = {54, 72, 46, 84, 60, 42, 78, 52, 68, 44, 74, 58};
+  for (int i = 0; i < 12; i++) {
+    int bx = i * 20;
+    int bh = BLD_H[i];
+    rect(bx + 1, HWY_Y1 - bh, 18, bh, RGB(12, 16, 40));
+    frame(bx + 1, HWY_Y1 - bh, 18, bh, RGB(24, 38, 78));
+  }
+  /* Perspective synthwave floor grid (lower 42px) */
+  for (int gy = HWY_Y1 - 40; gy < HWY_Y1; gy += 8) {
+    rect(0, gy, SCREEN_W, 1, RGB(44, 24, 96));
+  }
+  for (int k = 0; k < KEY_COUNT; k++) {
+    int semi = k % 12;
+    if (semi == 7) rect(key_x[k] - 1, HWY_Y0, 1, HWY_H, RGB(34, 48, 94));
+    else if (semi == 0) rect(key_x[k] - 1, HWY_Y0, 1, HWY_H, RGB(20, 26, 56));
+  }
+}
+
+static void draw_bg_medieval(uint32_t now) {
+  /* Stone castle brick wall */
+  rect(0, HWY_Y0, SCREEN_W, HWY_H, RGB(48, 36, 28));
+  for (int row = 0; row < 16; row++) {
+    int y = HWY_Y0 + row * 12;
+    if (y >= HWY_Y1) break;
+    rect(0, y, SCREEN_W, 1, RGB(24, 18, 14));
+    int off = (row & 1) ? 12 : 0;
+    for (int x = off; x < SCREEN_W; x += 24) {
+      rect(x, y, 1, 12, RGB(24, 18, 14));
+      if (((x + row) & 3) == 0 && x + 22 < SCREEN_W) {
+        rect(x + 2, y + 2, 20, 8, RGB(58, 44, 34));
+      }
+    }
+  }
+  /* Crimson banners & flickering wall torches on left/right edges */
+  uint8_t flk = (uint8_t)((now >> 6) & 3u);
+  static const uint8_t TY[2] = {54, 132};
+  for (int t = 0; t < 2; t++) {
+    int y = TY[t];
+    /* Left & right torch sconces */
+    rect(4, y + 6, 4, 10, RGB(70, 56, 46));
+    rect(SCREEN_W - 8, y + 6, 4, 10, RGB(70, 56, 46));
+    /* Animated torch flame */
+    int fh = 6 + (flk & 1);
+    rect(3, y + 6 - fh, 6, fh, C_FM1_ORANGE);
+    rect(4, y + 7 - fh, 4, fh - 2, C_GOLD);
+    pixel(5, y + 5 - fh, WHITE);
+    rect(SCREEN_W - 9, y + 6 - fh, 6, fh, C_FM1_ORANGE);
+    rect(SCREEN_W - 8, y + 7 - fh, 4, fh - 2, C_GOLD);
+    pixel(SCREEN_W - 6, y + 5 - fh, WHITE);
+  }
+}
+
+static void draw_bg_arcade(void) {
+  rect(0, HWY_Y0, SCREEN_W, HWY_H, BLACK);
+  /* Hot magenta retro perspective grid */
+  for (int y = HWY_Y0 + 16; y < HWY_Y1; y += 22) {
+    rect(0, y, SCREEN_W, 1, RGB(96, 18, 138));
+  }
+  for (int k = 0; k < KEY_COUNT; k++) {
+    int semi = k % 12;
+    if (semi == 7) rect(key_x[k] - 1, HWY_Y0, 1, HWY_H, RGB(130, 28, 185));
+    else if (semi == 0) rect(key_x[k] - 1, HWY_Y0, 1, HWY_H, RGB(64, 12, 92));
+  }
+}
+
+static void draw_bg_tiedye(uint32_t now) {
+  rect(0, HWY_Y0, SCREEN_W, HWY_H, RGB(8, 4, 18));
+  static const uint16_t RING_COLS[5] = {
+    RGB(38, 10, 48), RGB(12, 34, 48), RGB(14, 42, 22), RGB(44, 28, 10), RGB(48, 12, 34)
+  };
+  int shift = (int)((now >> 7) % 5u);
+  int cx = 120, cy = 96;
+  for (int r = 7; r >= 1; r--) {
+    int sz = r * 14;
+    uint16_t col = RING_COLS[(r + shift) % 5];
+    frame(cx - sz, cy - sz, sz * 2, sz * 2, col);
+    frame(cx - sz + 2, cy - sz + 2, sz * 2 - 4, sz * 2 - 4, col);
+  }
+  for (int k = 0; k < KEY_COUNT; k++) {
+    if ((k % 12) == 7) rect(key_x[k] - 1, HWY_Y0, 1, HWY_H, RGB(28, 20, 48));
+  }
+}
+
+static void draw_bg_lava(uint32_t now) {
+  rect(0, HWY_Y0, SCREEN_W, HWY_H, RGB(18, 8, 28));
+  /* Subtle warm bottom glow */
+  rect(0, HWY_Y1 - 24, SCREEN_W, 24, RGB(26, 12, 38));
+  /* Rising micro-bubbles */
+  int rise = (int)((now >> 5) % (uint32_t)HWY_H);
+  for (int i = 0; i < 20; i++) {
+    int bx = STAR_X[i];
+    int by = HWY_Y0 + ((STAR_Y[i] + HWY_H - rise) % HWY_H);
+    uint16_t bc = (i & 1) ? RGB(54, 96, 118) : RGB(84, 52, 112);
+    if ((i & 3) == 0 && by < HWY_Y1 - 3) {
+      frame(bx, by, 4, 4, bc);
+    } else {
+      pixel(bx, by, bc);
+    }
+  }
+}
+
+static void draw_bg_flower(void) {
+  rect(0, HWY_Y0, SCREEN_W, HWY_H, RGB(10, 26, 16));
+  /* Subtle retro floral wallpaper silhouettes */
+  uint16_t fcol = RGB(16, 40, 24);
+  for (int row = 0; row < 5; row++) {
+    for (int col = 0; col < 5; col++) {
+      int fx = 20 + col * 48 + ((row & 1) ? 20 : 0);
+      int fy = 22 + row * 36;
+      if (fx < SCREEN_W - 10 && fy < HWY_Y1 - 10) {
+        rect(fx - 5, fy - 2, 11, 5, fcol);
+        rect(fx - 2, fy - 5, 5, 11, fcol);
+        rect(fx - 1, fy - 1, 3, 3, RGB(28, 52, 26));
+      }
+    }
+  }
+  for (int k = 0; k < KEY_COUNT; k++) {
+    if ((k % 12) == 7) rect(key_x[k] - 1, HWY_Y0, 1, HWY_H, RGB(20, 52, 30));
+  }
+}
+
+static void draw_bg_mandala(uint32_t now) {
+  rect(0, HWY_Y0, SCREEN_W, HWY_H, RGB(14, 6, 32));
+  int cx = 120, cy = 96;
+  uint16_t m1 = RGB(48, 22, 86);
+  uint16_t m2 = RGB(74, 34, 124);
+  /* Concentric sacred-geometry squares & rotated diamonds */
+  for (int r = 18; r <= 78; r += 20) {
+    frame(cx - r, cy - r, r * 2, r * 2, m1);
+    line(cx, cy - r, cx + r, cy, m2);
+    line(cx + r, cy, cx, cy + r, m2);
+    line(cx, cy + r, cx - r, cy, m2);
+    line(cx - r, cy, cx, cy - r, m2);
+  }
+  /* Subtle golden stardust */
+  uint32_t tw = now >> 8;
+  for (int i = 0; i < 16; i++) {
+    if (((i + tw) & 1u) == 0) {
+      pixel(STAR_X[i], STAR_Y[i], C_GOLD);
+    }
+  }
+}
+
+static void draw_bg_groovy(void) {
+  rect(0, HWY_Y0, SCREEN_W, HWY_H, RGB(28, 18, 11));
+  /* Iconic 1970s layered retro stripes along left & right sides */
+  static const uint16_t GCOLS[4] = {
+    RGB(110, 44, 20), RGB(138, 84, 22), RGB(92, 98, 26), RGB(26, 86, 84)
+  };
+  for (int s = 0; s < 4; s++) {
+    int y = 62 + s * 10;
+    rect(0, y, 44 - s * 6, 8, GCOLS[s]);
+    rect(44 - s * 6, y, 8, HWY_Y1 - y, GCOLS[s]);
+    int rx = SCREEN_W - (44 - s * 6);
+    rect(rx, y - 24, 44 - s * 6, 8, GCOLS[s]);
+    rect(rx - 8, y - 24, 8, HWY_Y1 - (y - 24), GCOLS[s]);
+  }
+  for (int k = 0; k < KEY_COUNT; k++) {
+    if ((k % 12) == 7) rect(key_x[k] - 1, HWY_Y0, 1, HWY_H, RGB(58, 40, 26));
+  }
+}
+
+static void draw_themed_note(int x, int y_top, int w, int h, int is_lh, int blk, uint8_t flags, uint32_t now) {
+  int y_bot = y_top + h;
+  int theme = saved.theme % THEME_COUNT;
+  uint8_t pulse_on = ((now >> 7) & 1u) != 0;
+  int is_wait = (last_judge == JUDGE_WAIT && !(flags & NF_DONE) && note_is_player_hand(flags));
+  int is_hit = (flags & NF_HIT) != 0;
+  int is_miss = (flags & NF_MISSED) != 0;
+
+  if (is_miss) {
+    rect(x, y_top, w, h, C_MISS_CORE);
+    frame(x, y_top, w, h, C_MISS_EDGE);
     return;
   }
-  if (!is_playing && !is_finished) {
-    jstr = "PAUSED";
-    jcol = C_WAIT_PULSE;
-  } else if (last_judge == JUDGE_WAIT) {
-    jstr = "PLAY LIT KEY";
-    jcol = C_WAIT_PULSE;
-  } else if (millis() < judge_until_ms) {
-    switch (last_judge) {
-      case JUDGE_PERFECT: jstr = "PERFECT!"; jcol = C_RH_WHITE_HI; break;
-      case JUDGE_GREAT:   jstr = "GREAT!";   jcol = C_LH_WHITE_HI; break;
-      case JUDGE_GOOD:    jstr = "GOOD";     jcol = C_WAIT_PULSE; break;
-      case JUDGE_MISS:    jstr = "MISS";     jcol = RGB(255, 120, 120); break;
-      default: break;
+
+  if (theme == THEME_SPACE) {
+    /* Falling Comet: tapered flickering plasma tail + glowing icy/emerald head at y_bot */
+    uint16_t edge = is_wait ? (pulse_on ? WHITE : C_GOLD) : (is_lh ? C_LH_EDGE : C_RH_EDGE);
+    uint16_t hot  = is_wait ? WHITE : (is_lh ? C_LH_HOT : C_RH_HOT);
+    uint16_t dim  = is_lh ? C_LH_CORE : C_RH_CORE;
+    int head_h = h < 9 ? h : 9;
+    int tail_h = h - head_h;
+    if (tail_h > 0) {
+      int flick = (int)(((now >> 5) + x) & 1u);
+      int tw = w > 4 ? w - 4 : 2;
+      rect(x + ((w - tw) >> 1), y_top, tw, tail_h, dim);
+      if (tail_h > 4) {
+        rect(x + ((w - 2) >> 1), y_top + 2 + flick, 2, tail_h - 2 - flick, edge);
+      }
     }
+    int hy = y_bot - head_h;
+    rect(x + 1, hy, w - 2, head_h, edge);
+    rect(x, hy + 1, w, head_h - 2, edge);
+    if (w >= 5 && head_h >= 5) {
+      rect(x + 2, hy + 2, w - 4, head_h - 4, is_hit ? WHITE : hot);
+    }
+    return;
   }
-  if (jstr[0]) {
-    text(SCREEN_W - text_width(jstr, FONT_SMALL) - 4, HUD_Y + 15, jstr, jcol, FONT_SMALL);
+
+  if (theme == THEME_CARTOON) {
+    /* Glossy cartoon jelly capsule with black ink outline & tiny cute face */
+    uint16_t body = is_wait ? C_GOLD : (is_lh ? (blk ? RGB(158, 86, 232) : RGB(58, 168, 248)) : (blk ? RGB(255, 186, 36) : RGB(84, 212, 54)));
+    if (is_hit) body = WHITE;
+    rect(x + 1, y_top + 1, w - 2, h - 2, body);
+    /* Crisp black cartoon ink outline */
+    rect(x + 1, y_top, w - 2, 1, BLACK);
+    rect(x + 1, y_bot - 1, w - 2, 1, BLACK);
+    rect(x, y_top + 1, 1, h - 2, BLACK);
+    rect(x + w - 1, y_top + 1, 1, h - 2, BLACK);
+    /* Specular shine strip */
+    if (h >= 7 && w >= 6) {
+      rect(x + 2, y_top + 2, 1, h - 4, WHITE);
+    }
+    /* Cute 2-dot cartoon eyes + smile near bottom/top on taller notes */
+    if (h >= 12 && w >= 7) {
+      int fy = y_bot - 8;
+      pixel(x + 2, fy, BLACK);
+      pixel(x + w - 3, fy, BLACK);
+      rect(x + 3, fy + 2, w - 6 > 1 ? w - 6 : 2, 1, BLACK);
+    }
+    return;
+  }
+
+  if (theme == THEME_CYBER) {
+    /* Cyberpunk Laser Trail + Glowing Square Neon Core */
+    uint16_t neon = is_wait ? C_GOLD : (is_lh ? RGB(255, 42, 212) : RGB(0, 234, 255));
+    uint16_t hot  = is_lh ? RGB(255, 190, 245) : RGB(185, 252, 255);
+    int head_h = h < 9 ? h : 9;
+    int tail_h = h - head_h;
+    if (tail_h > 0) {
+      int cx = x + (w >> 1);
+      rect(cx - 1, y_top, 3, tail_h, neon);
+      rect(cx, y_top, 1, tail_h, WHITE);
+    }
+    int hy = y_bot - head_h;
+    rect(x, hy, w, head_h, is_lh ? RGB(42, 10, 48) : RGB(8, 34, 48));
+    frame(x, hy, w, head_h, is_hit ? WHITE : neon);
+    if (w >= 5 && head_h >= 5) {
+      rect(x + 2, hy + 2, w - 4, head_h - 4, hot);
+    }
+    return;
+  }
+
+  if (theme == THEME_MEDIEVAL) {
+    if (!is_lh) {
+      /* RH: Glowing Pixel Sword (steel-cyan blade + golden crossguard + pommel) */
+      int cx = x + (w >> 1);
+      uint16_t blade = is_wait ? C_GOLD : (is_hit ? WHITE : RGB(120, 224, 255));
+      int guard_y = y_top + 4;
+      if (guard_y > y_bot - 4) guard_y = y_top + 1;
+      /* Pommel & hilt */
+      rect(cx - 1, y_top, 3, guard_y - y_top, C_FM1_ORANGE);
+      /* Golden crossguard */
+      rect(x, guard_y, w, 2, C_GOLD);
+      /* Glowing blade extending down to y_bot */
+      int bh = y_bot - (guard_y + 2);
+      if (bh > 0) {
+        rect(cx - 2, guard_y + 2, 5 <= w ? 5 : w, bh, blade);
+        rect(cx, guard_y + 2, 1, bh, WHITE);
+      }
+    } else {
+      /* LH: Magic Rune Scroll (parchment + wooden rollers + glowing cyan rune) */
+      uint16_t parch = is_wait ? C_GOLD : RGB(224, 198, 146);
+      rect(x + 1, y_top + 1, w - 2, h - 2, parch);
+      rect(x, y_top, w, 2, RGB(128, 82, 42));
+      rect(x, y_bot - 2, w, 2, RGB(128, 82, 42));
+      if (h >= 8 && w >= 6) {
+        int cy = y_top + (h >> 1);
+        int cx = x + (w >> 1);
+        rect(cx - 1, cy - 2, 3, 5, is_hit ? WHITE : C_LH_EDGE);
+      }
+    }
+    return;
+  }
+
+  if (theme == THEME_TIEDYE) {
+    /* Blacklight Neon Border + Animated Psychedelic Tie-Dye Stripes */
+    static const uint16_t TD[6] = {
+      RGB(255, 42, 190), RGB(255, 190, 24), RGB(56, 245, 96),
+      RGB(32, 224, 255), RGB(148, 64, 255), RGB(255, 72, 72)
+    };
+    int phase = (int)((now >> 6) + (uint32_t)x) % 6;
+    for (int py = y_top + 1; py < y_bot - 1; py += 2) {
+      int sh = (py - y_top) / 2;
+      uint16_t c = TD[(sh + phase) % 6];
+      rect(x + 1, py, w - 2, (py + 2 <= y_bot - 1) ? 2 : 1, c);
+    }
+    frame(x, y_top, w, h, is_hit ? WHITE : (is_lh ? C_LH_EDGE : C_RH_EDGE));
+    return;
+  }
+
+  if (theme == THEME_LAVA) {
+    /* Glossy Pinched-Waist Lava Lamp Blob */
+    uint16_t body = is_wait ? C_GOLD : (is_lh ? RGB(28, 178, 255) : RGB(152, 242, 32));
+    uint16_t edge = is_hit ? WHITE : (is_lh ? C_LH_HOT : RGB(220, 255, 140));
+    uint16_t deep = is_lh ? RGB(10, 96, 176) : RGB(84, 154, 12);
+    if (h >= 12 && w >= 6) {
+      /* Bulbous top & bottom with pinched waist in middle */
+      int mid_y = y_top + (h >> 1);
+      rect(x + 2, y_top + 3, w - 4, h - 6, body);
+      rect(x + 1, y_top + 1, w - 2, 5, body);
+      rect(x + 1, y_bot - 6, w - 2, 5, body);
+      rect(x + 2, y_top, w - 4, 1, edge);
+      rect(x + 2, y_bot - 1, w - 4, 1, deep);
+      /* Specular liquid gloss dot */
+      rect(x + 2, y_top + 2, 2, 3, WHITE);
+      pixel(x + 2, mid_y, edge);
+    } else {
+      rect(x + 1, y_top, w - 2, h, body);
+      rect(x, y_top + 1, w, h - 2, body);
+      pixel(x + 2, y_top + 1, WHITE);
+    }
+    return;
+  }
+
+  if (theme == THEME_FLOWER) {
+    /* Glossy Stem Bar capped with a Pixel White-and-Gold Daisy at leading edge */
+    uint16_t stem = is_wait ? C_GOLD : (is_lh ? RGB(38, 168, 246) : RGB(56, 212, 82));
+    uint16_t rim  = is_hit ? WHITE : (is_lh ? C_LH_HOT : C_RH_HOT);
+    rect(x + 1, y_top, w - 2, h, stem);
+    frame(x + 1, y_top, w - 2, h, rim);
+    /* Daisy blossom at y_bot */
+    int cx = x + (w >> 1);
+    int cy = y_bot - 4;
+    if (cy < y_top + 3) cy = y_top + (h >> 1);
+    rect(cx - 3, cy - 1, 7 <= w ? 7 : w, 3, WHITE);
+    rect(cx - 1, cy - 3, 3, 7 <= h ? 7 : h, WHITE);
+    rect(cx - 1, cy - 1, 3, 3, C_GOLD);
+    return;
+  }
+
+  if (theme == THEME_MANDALA) {
+    /* Pointed Prismatic Crystal Shard */
+    uint16_t c1 = is_wait ? C_GOLD : (is_lh ? RGB(42, 218, 255) : RGB(48, 240, 168));
+    uint16_t c2 = is_lh ? RGB(164, 88, 255) : RGB(248, 224, 92);
+    int cx = x + (w >> 1);
+    if (h >= 10 && w >= 5) {
+      rect(x + 1, y_top + 2, w - 2, h - 4, c1);
+      rect(cx - 1, y_top, 3, h, c2);
+      frame(x + 1, y_top + 2, w - 2, h - 4, is_hit ? WHITE : C_GOLD);
+      pixel(cx, y_top, WHITE);
+      pixel(cx, y_bot - 1, WHITE);
+      rect(cx, y_top + 3, 1, h - 6, WHITE);
+    } else {
+      rect(x + 1, y_top, w - 2, h, c1);
+      frame(x + 1, y_top, w - 2, h, C_GOLD);
+    }
+    return;
+  }
+
+  if (theme == THEME_GROOVY) {
+    /* 70s Retro Glossy Pill (Avocado/Gold for RH, Turquoise/Amber for LH) */
+    uint16_t outer = is_wait ? C_GOLD : (is_lh ? RGB(34, 198, 186) : RGB(156, 206, 36));
+    uint16_t inner = is_lh ? RGB(246, 178, 42) : RGB(248, 210, 56);
+    rect(x + 1, y_top, w - 2, h, outer);
+    rect(x, y_top + 1, w, h - 2, outer);
+    if (w >= 6 && h >= 6) {
+      rect(x + 2, y_top + 2, w - 4, h - 4, is_hit ? WHITE : inner);
+      rect(x + 2, y_top + 2, 1, h - 4, WHITE);
+    }
+    frame(x, y_top + 1, w, h - 2, RGB(58, 32, 14));
+    return;
+  }
+
+  /* THEME_ARCADE: RH = Faceted Pixel Gem, LH = Classic 8-bit Brick Stack */
+  if (!is_lh) {
+    uint16_t gem = is_wait ? C_GOLD : (blk ? RGB(255, 160, 24) : RGB(245, 56, 140));
+    uint16_t hi  = is_hit ? WHITE : RGB(255, 200, 230);
+    rect(x + 1, y_top, w - 2, h, gem);
+    rect(x, y_top + 1, w, h - 2, gem);
+    if (w >= 5 && h >= 5) {
+      rect(x + 2, y_top + 2, w - 4, h - 4, hi);
+      rect(x + 3, y_top + 3, w - 6 > 1 ? w - 6 : 1, h - 6 > 1 ? h - 6 : 1, gem);
+    }
+  } else {
+    uint16_t brk = blk ? RGB(56, 224, 96) : RGB(236, 76, 54);
+    rect(x, y_top, w, h, brk);
+    frame(x, y_top, w, h, is_hit ? WHITE : RGB(255, 200, 140));
+    for (int by = y_top + 3; by < y_bot - 1; by += 4) {
+      rect(x, by, w, 1, BLACK);
+    }
   }
 }
 
-static void draw_bottom_bar(void) {
-  static const char *const SHORT_PATCH[PATCH_COUNT] = {"GRND", "EPNO", "CHIP", "BELL", "BRAS", "PAD"};
-  rect(0, BOT_Y, SCREEN_W, SCREEN_H - BOT_Y, C_BOT_BG);
-  rect(0, BOT_Y, SCREEN_W, 1, RGB(65, 70, 80));
+static void draw_themed_impacts(uint32_t now) {
+  int theme = saved.theme % THEME_COUNT;
+  for (int k = 0; k < KEY_COUNT; k++) {
+    uint8_t fl = lane_flash_ms[k];
+    if (fl == 0) continue;
+    int is_lh = lane_flash_lh[k];
+    int cx = key_x[k] + (key_w[k] >> 1);
+    int r = (fl * 14) / 200;
+    if (r < 3) r = 3;
 
-  char b0[16], b1[16], b2[16], b3[16];
-  str_cat(str_cat_int(str_cat(b0, "SPD:"), saved.speed_pct), "%");
-  str_cat(str_cat(b1, "SND:"), SHORT_PATCH[saved.patch % PATCH_COUNT]);
-  str_cat_int(str_cat(b2, "FM:"), saved.fm_bright);
-  if (loop_state == 2) {
-    str_cat(b3, "LOOP:AB");
-  } else if (saved.metronome) {
-    str_cat(b3, "MET:ON");
-  } else {
-    str_cat_int(str_cat(b3, "ECH:"), saved.echo_mix);
+    if (theme == THEME_SPACE) {
+      /* Supernova starburst flash on impact */
+      uint16_t col = is_lh ? C_LH_EDGE : C_GOLD;
+      line(cx - r, HWY_Y1 - 4, cx + r, HWY_Y1 - 4, col);
+      line(cx, HWY_Y1 - 4 - r, cx, HWY_Y1 - 2, WHITE);
+      int d = (r * 7) / 10;
+      line(cx - d, HWY_Y1 - 4 - d, cx + d, HWY_Y1 - 4 + (d >> 1), is_lh ? C_LH_HOT : C_FM1_ORANGE);
+      line(cx + d, HWY_Y1 - 4 - d, cx - d, HWY_Y1 - 4 + (d >> 1), is_lh ? C_LH_HOT : C_FM1_ORANGE);
+      rect(cx - 2, HWY_Y1 - 6, 5, 5, WHITE);
+    } else if (theme == THEME_CARTOON) {
+      /* Comic jagged starburst + POW! on big hits */
+      rect(cx - r, HWY_Y1 - r - 2, r * 2, r + 1, C_GOLD);
+      frame(cx - r, HWY_Y1 - r - 2, r * 2, r + 1, BLACK);
+      if (r >= 6) {
+        rect(cx - r + 2, HWY_Y1 - r, (r - 2) * 2, r - 3, C_FM1_ORANGE);
+        if (fl > 130 && cx > 18 && cx < SCREEN_W - 22) {
+          text(cx - 12, HWY_Y1 - 15, is_lh ? "BAM" : "POW", BLACK, FONT_SMALL);
+        }
+      }
+    } else if (theme == THEME_CYBER) {
+      /* Glitch bars + neon X lightning */
+      uint16_t col = is_lh ? RGB(255, 42, 212) : RGB(0, 234, 255);
+      line(cx - r, HWY_Y1 - r, cx + r, HWY_Y1 - 1, col);
+      line(cx + r, HWY_Y1 - r, cx - r, HWY_Y1 - 1, WHITE);
+      int gx = (int)(((now >> 4) & 3u) - 1) * 3;
+      rect(cx - r + gx, HWY_Y1 - 8, r * 2, 2, RGB(255, 42, 212));
+      rect(cx - r - gx, HWY_Y1 - 4, r * 2, 2, RGB(0, 234, 255));
+    } else if (theme == THEME_MEDIEVAL) {
+      /* Arcane magic rune ring */
+      uint16_t col = is_lh ? RGB(178, 96, 255) : C_GOLD;
+      frame(cx - r, HWY_Y1 - r - 3, r * 2, r + 2, col);
+      if (r >= 5) {
+        frame(cx - r + 2, HWY_Y1 - r - 1, (r - 2) * 2, r - 2, WHITE);
+      }
+    } else if (theme == THEME_TIEDYE) {
+      /* Rainbow Peace-Sign Impact Burst */
+      uint16_t pc = is_lh ? C_LH_EDGE : RGB(255, 64, 210);
+      int cy = HWY_Y1 - r - 2;
+      frame(cx - r, cy - r, r * 2, r * 2, pc);
+      line(cx, cy - r, cx, cy + r, WHITE);
+      line(cx, cy, cx - (r * 7) / 10, cy + (r * 7) / 10, C_GOLD);
+      line(cx, cy, cx + (r * 7) / 10, cy + (r * 7) / 10, C_RH_EDGE);
+    } else if (theme == THEME_LAVA) {
+      /* Liquid Splash Crown + Concentric Ripples */
+      uint16_t lc = is_lh ? C_LH_EDGE : RGB(152, 242, 32);
+      rect(cx - r, HWY_Y1 - 3, r * 2, 2, lc);
+      line(cx, HWY_Y1 - 2, cx - (r * 8) / 10, HWY_Y1 - r - 2, WHITE);
+      line(cx, HWY_Y1 - 2, cx + (r * 8) / 10, HWY_Y1 - r - 2, lc);
+      rect(cx - 2, HWY_Y1 - r, 4, r, lc);
+    } else if (theme == THEME_FLOWER) {
+      /* Blooming White-Petal Daisy Burst */
+      int cy = HWY_Y1 - r - 1;
+      rect(cx - r, cy - 2, r * 2, 5, WHITE);
+      rect(cx - 2, cy - r, 5, r * 2, WHITE);
+      rect(cx - 2, cy - 2, 5, 5, C_GOLD);
+    } else if (theme == THEME_MANDALA) {
+      /* Concentric Sacred-Geometry Neon Rings */
+      int cy = HWY_Y1 - r - 1;
+      frame(cx - r, cy - r, r * 2, r * 2, RGB(178, 108, 255));
+      if (r >= 5) {
+        int r2 = r - 3;
+        frame(cx - r2, cy - r2, r2 * 2, r2 * 2, C_LH_EDGE);
+        line(cx - r, cy, cx + r, cy, WHITE);
+        line(cx, cy - r, cx, cy + r, C_GOLD);
+      }
+    } else if (theme == THEME_GROOVY) {
+      /* Warm 70s Golden Starburst Lens Flare */
+      line(cx - r - 2, HWY_Y1 - 4, cx + r + 2, HWY_Y1 - 4, C_FM1_ORANGE);
+      line(cx, HWY_Y1 - 4 - r, cx, HWY_Y1 - 1, C_GOLD);
+      int d = (r * 7) / 10;
+      line(cx - d, HWY_Y1 - 4 - d, cx + d, HWY_Y1 - 4 + (d >> 1), C_GOLD);
+      line(cx + d, HWY_Y1 - 4 - d, cx - d, HWY_Y1 - 4 + (d >> 1), C_GOLD);
+      rect(cx - 2, HWY_Y1 - 6, 5, 5, WHITE);
+    } else {
+      /* Retro 8-bit square pixel burst */
+      uint16_t col = is_lh ? C_LH_EDGE : C_GOLD;
+      rect(cx - r, HWY_Y1 - r, 3, 3, col);
+      rect(cx + r - 2, HWY_Y1 - r, 3, 3, RGB(255, 56, 180));
+      rect(cx - (r >> 1), HWY_Y1 - r - 4, 3, 3, WHITE);
+      rect(cx + (r >> 1), HWY_Y1 - (r >> 1) - 2, 3, 3, C_FM1_ORANGE);
+    }
   }
+}
 
-  text(4,   BOT_Y + 2, b0, C_RH_WHITE, FONT_SMALL);
-  text(68,  BOT_Y + 2, b1, C_LH_WHITE, FONT_SMALL);
-  text(134, BOT_Y + 2, b2, WHITE,      FONT_SMALL);
-  text(184, BOT_Y + 2, b3, C_WAIT_PULSE, FONT_SMALL);
+static void draw_strike_line(void) {
+  int theme = saved.theme % THEME_COUNT;
+  uint16_t rail_bg = theme == THEME_CARTOON ? RGB(52, 116, 42) : theme == THEME_ARCADE ? BLACK : RGB(14, 18, 28);
+  uint16_t rail_ln = theme_accent_col();
+  if (theme == THEME_CARTOON) rail_ln = BLACK;
+  rect(0, FELT_Y, SCREEN_W, 3, rail_bg);
+  rect(0, FELT_Y + 1, SCREEN_W, 1, rail_ln);
+  for (int k = 0; k < KEY_COUNT; k++) {
+    uint8_t fl = lane_flash_ms[k];
+    if (fl > 0) {
+      int is_lh = lane_flash_lh[k];
+      uint16_t edge = is_lh ? C_LH_EDGE : C_RH_EDGE;
+      uint16_t hot  = fl > 130 ? WHITE : (is_lh ? C_LH_HOT : C_RH_HOT);
+      int bx = key_x[k] - 3;
+      int bw = key_w[k] + 6;
+      if (bx < 0) bx = 0;
+      if (bx + bw > SCREEN_W) bw = SCREEN_W - bx;
+      rect(bx, FELT_Y, bw, 3, edge);
+      rect(key_x[k], FELT_Y, key_w[k], 3, hot);
+    }
+  }
 }
 
 static void draw_keyboard(uint32_t held_mask, uint32_t rh_cue, uint32_t lh_cue) {
-  /* Red felt strip right above the keys (y = 177..179) */
-  rect(0, FELT_Y, SCREEN_W, 3, C_SYN_FELT);
-  rect(0, KB_Y, SCREEN_W, KB_WHITE_H + 1, BLACK);
+  int theme = saved.theme % THEME_COUNT;
+  draw_strike_line();
+  rect(0, KB_Y, SCREEN_W, KB_WHITE_H, BLACK);
+
+  uint16_t w_top = (theme == THEME_MEDIEVAL || theme == THEME_MANDALA) ? RGB(218, 190, 142) : theme == THEME_GROOVY ? RGB(204, 164, 108) : theme == THEME_CYBER ? RGB(150, 162, 188) : C_KEY_W_TOP;
+  uint16_t w_mid = (theme == THEME_MEDIEVAL || theme == THEME_MANDALA) ? RGB(190, 158, 110) : theme == THEME_GROOVY ? RGB(164, 124, 76)  : theme == THEME_CYBER ? RGB(114, 126, 154) : C_KEY_W_MID;
+  uint16_t w_bot = (theme == THEME_MEDIEVAL || theme == THEME_MANDALA) ? RGB(144, 114, 74)  : theme == THEME_GROOVY ? RGB(110, 76, 44)   : theme == THEME_CYBER ? RGB(74, 84, 108)   : C_KEY_W_BOT;
 
   /* 16 White keys */
   for (int k = 0; k < KEY_COUNT; k++) {
@@ -654,10 +1352,26 @@ static void draw_keyboard(uint32_t held_mask, uint32_t rh_cue, uint32_t lh_cue) 
       int held = (held_mask >> k) & 1u;
       int rc = (rh_cue >> k) & 1u;
       int lc = (lh_cue >> k) & 1u;
-      uint16_t col = held ? C_HIT_GLOW : rc ? C_RH_WHITE : lc ? C_LH_WHITE : C_SYN_WHITE_K;
-      uint16_t lip = held ? C_RH_BLACK : rc ? C_RH_BLACK : lc ? C_LH_BLACK : RGB(180, 178, 168);
-      rect(key_x[k], KB_Y, key_w[k], KB_WHITE_H, col);
-      rect(key_x[k], KB_Y + KB_WHITE_H - 3, key_w[k], 3, lip);
+      int fl = lane_flash_ms[k];
+      int x = key_x[k], w = key_w[k];
+      if (theme == THEME_ARCADE && !held && !rc && !lc && fl <= 70) {
+        rect(x, KB_Y, w, KB_WHITE_H, BLACK);
+        frame(x, KB_Y, w, KB_WHITE_H, RGB(140, 36, 200));
+      } else if (held || fl > 70) {
+        int is_lh = (lc && !rc) || (fl > 0 && lane_flash_lh[k] && !rc);
+        rect(x, KB_Y, w, 6, WHITE);
+        rect(x, KB_Y + 6, w, 14, is_lh ? C_LH_HOT : C_RH_HOT);
+        rect(x, KB_Y + 20, w, KB_WHITE_H - 24, is_lh ? C_LH_EDGE : C_RH_EDGE);
+        rect(x, KB_Y + KB_WHITE_H - 4, w, 4, is_lh ? C_LH_CORE : C_RH_CORE);
+      } else if (rc || lc) {
+        rect(x, KB_Y, w, 10, rc ? C_RH_HOT : C_LH_HOT);
+        rect(x, KB_Y + 10, w, KB_WHITE_H - 14, rc ? C_RH_EDGE : C_LH_EDGE);
+        rect(x, KB_Y + KB_WHITE_H - 4, w, 4, rc ? C_RH_CORE : C_LH_CORE);
+      } else {
+        rect(x, KB_Y, w, 18, w_top);
+        rect(x, KB_Y + 18, w, KB_WHITE_H - 22, w_mid);
+        rect(x, KB_Y + KB_WHITE_H - 4, w, 4, w_bot);
+      }
     }
   }
   /* 11 Black keys */
@@ -666,149 +1380,432 @@ static void draw_keyboard(uint32_t held_mask, uint32_t rh_cue, uint32_t lh_cue) 
       int held = (held_mask >> k) & 1u;
       int rc = (rh_cue >> k) & 1u;
       int lc = (lh_cue >> k) & 1u;
-      uint16_t col = held ? C_HIT_GLOW : rc ? C_RH_BLACK : lc ? C_LH_BLACK : RGB(24, 24, 28);
-      uint16_t hi  = held ? WHITE      : rc ? C_RH_WHITE : lc ? C_LH_WHITE : RGB(70, 70, 78);
-      rect(key_x[k] - 1, KB_Y, key_w[k] + 2, KB_BLACK_H + 1, BLACK);
-      rect(key_x[k], KB_Y, key_w[k], KB_BLACK_H, col);
-      rect(key_x[k] + 1, KB_Y + KB_BLACK_H - 3, key_w[k] - 2, 2, hi);
+      int fl = lane_flash_ms[k];
+      int x = key_x[k], w = key_w[k];
+      rect(x - 1, KB_Y, w + 2, KB_BLACK_H + 1, BLACK);
+      if (held || fl > 70) {
+        int is_lh = (lc && !rc) || (fl > 0 && lane_flash_lh[k] && !rc);
+        rect(x, KB_Y, w, 6, WHITE);
+        rect(x, KB_Y + 6, w, KB_BLACK_H - 6, is_lh ? C_LH_EDGE : C_RH_EDGE);
+        frame(x, KB_Y, w, KB_BLACK_H, is_lh ? C_LH_HOT : C_RH_HOT);
+      } else if (rc || lc) {
+        rect(x, KB_Y, w, KB_BLACK_H, rc ? C_RH_CORE : C_LH_CORE);
+        frame(x, KB_Y, w, KB_BLACK_H, rc ? C_RH_EDGE : C_LH_EDGE);
+        rect(x + 1, KB_Y + KB_BLACK_H - 4, w - 2, 3, rc ? C_RH_HOT : C_LH_HOT);
+      } else if (theme == THEME_ARCADE) {
+        rect(x, KB_Y, w, KB_BLACK_H, BLACK);
+        frame(x, KB_Y, w, KB_BLACK_H, RGB(210, 56, 255));
+      } else {
+        rect(x, KB_Y, w, KB_BLACK_H, theme == THEME_MEDIEVAL ? RGB(42, 28, 18) : C_KEY_B_BODY);
+        frame(x, KB_Y, w, KB_BLACK_H, theme == THEME_MEDIEVAL ? RGB(92, 66, 44) : C_KEY_B_HI);
+        rect(x + 1, KB_Y + KB_BLACK_H - 3, w - 2, 2, RGB(78, 90, 114));
+      }
     }
   }
 }
 
-static void draw_finish_overlay(void) {
-  rect(16, 44, 208, 126, RGB(36, 40, 46));
-  frame(16, 44, 208, 126, C_SYN_HEADER);
-  rect(16, 44, 208, 20, C_SYN_HEADER);
-
-  const char *hdr = "RECITAL COMPLETE!";
-  text((SCREEN_W - text_width(hdr, FONT_SMALL)) / 2, 46, hdr, WHITE, FONT_SMALL);
+static void draw_finish_overlay(uint32_t now) {
+  rect(0, HWY_Y0, SCREEN_W, HWY_H, C_BG_VOID);
 
   uint32_t total = (uint32_t)hits_perfect + hits_good + hits_missed;
   uint32_t pct = total ? ((uint32_t)(hits_perfect * 100u + hits_good * 70u) / total) : 100u;
   const char *grade = pct >= 95 ? "S" : pct >= 85 ? "A" : pct >= 70 ? "B" : "C";
-  uint16_t gcol = pct >= 95 ? C_WAIT_PULSE : pct >= 85 ? C_RH_WHITE : C_LH_WHITE;
+  uint16_t gcol = pct >= 95 ? C_GOLD : pct >= 85 ? C_RH_EDGE : C_LH_EDGE;
 
-  text(28, 72, "RANK", C_DIM, FONT_SMALL);
-  text(34, 90, grade, gcol, FONT_BIG);
+  int32_t el = (int32_t)(now - finish_start_ms);
+  int32_t slide = ease_out_quad(el, 160);
+  int y0 = 28 + (((256 - slide) * 16) >> 8);
+
+  draw_outlined_box(12, y0, 216, 132, C_SURF_ELEV, gcol, WHITE);
+  rect(13, y0 + 1, 214, 18, C_SURF_RECESS);
+  rect(13, y0 + 19, 214, 1, C_OUTLINE_IDLE);
+
+  const char *hdr = "RECITAL COMPLETE";
+  text((SCREEN_W - text_width(hdr, FONT_SMALL)) / 2, y0 + 2, hdr, gcol, FONT_SMALL);
 
   char buf[28];
-  str_cat_int(str_cat(buf, "SCORE: "), (int32_t)score);
-  text(80, 70, buf, WHITE, FONT_SMALL);
+  if (el >= 80) {
+    str_cat_int(str_cat(buf, "SCORE:  "), (int32_t)score);
+    text(84, y0 + 28, buf, C_TEXT_PRI, FONT_SMALL);
+  }
+  if (el >= 180) {
+    str_cat_int(str_cat(buf, "COMBO:  "), max_combo);
+    text(84, y0 + 46, buf, C_RH_EDGE, FONT_SMALL);
+  }
+  if (el >= 280) {
+    str_cat(str_cat_int(str_cat(buf, "ACCUR:  "), (int32_t)pct), "%");
+    text(84, y0 + 64, buf, C_LH_EDGE, FONT_SMALL);
+  }
+  if (el >= 380) {
+    str_cat_int(str_cat(buf, "BEST:   "), (int32_t)saved.high_score[saved.song_idx]);
+    text(84, y0 + 82, buf, C_GOLD, FONT_SMALL);
+  }
+  if (el >= 400) {
+    int pop = (el < 540) ? 2 : 0;
+    draw_outlined_box(24 - pop, y0 + 30 - pop, 48 + pop * 2, 58 + pop * 2, C_SURF_RECESS, pop ? WHITE : gcol, gcol);
+    text(32, y0 + 34, "RANK", C_TEXT_DIM, FONT_SMALL);
+    text(40, y0 + 50, grade, gcol, FONT_BIG);
+  }
 
-  str_cat_int(str_cat(buf, "STREAK: "), max_combo);
-  text(80, 88, buf, C_RH_WHITE, FONT_SMALL);
-
-  str_cat(str_cat_int(str_cat(buf, "HIT: "), (int32_t)pct), "%");
-  text(80, 106, buf, C_LH_WHITE, FONT_SMALL);
-
-  str_cat_int(str_cat(buf, "BEST: "), (int32_t)saved.high_score[saved.song_idx]);
-  text(80, 124, buf, C_WAIT_PULSE, FONT_SMALL);
-
-  const char *foot = "PLAY:RETRY  SELECT:NEXT";
-  text((SCREEN_W - text_width(foot, FONT_SMALL)) / 2, 148, foot, C_DIM, FONT_SMALL);
+  const char *foot = "PLAY:RETRY  GLO:MENU";
+  text((SCREEN_W - text_width(foot, FONT_SMALL)) / 2, y0 + 110, foot, C_TEXT_DIM, FONT_SMALL);
 }
 
-static void draw_highway(void) {
+static void draw_floating_judge(uint32_t now) {
+  if (now >= judge_until_ms || last_judge < JUDGE_PERFECT) {
+    return;
+  }
+  const char *jstr = "";
+  uint16_t jcol = C_TEXT_PRI;
+  switch (last_judge) {
+    case JUDGE_PERFECT: jstr = "PERFECT!"; jcol = C_GOLD; break;
+    case JUDGE_GREAT:   jstr = "GREAT!";   jcol = C_RH_EDGE; break;
+    case JUDGE_GOOD:    jstr = "GOOD";     jcol = C_LH_EDGE; break;
+    case JUDGE_MISS:    jstr = "MISS";     jcol = C_CRIMSON; break;
+    default: return;
+  }
+  int32_t el = (int32_t)(now - judge_start_ms);
+  int32_t ease = ease_out_quad(el, 320);
+  int jy = (HWY_Y1 - 30) - ((ease * 18) >> 8);
+  char jbuf[24];
+  char *jp = str_cat(jbuf, jstr);
+  if (combo > 1 && last_judge != JUDGE_MISS) {
+    jp = str_cat(jp, " x");
+    str_cat_int(jp, combo);
+  }
+  int jw = text_width(jbuf, FONT_SMALL) + 12;
+  int jx = (SCREEN_W - jw) >> 1;
+  rect(jx, jy, jw, 16, C_SURF_RECESS);
+  frame(jx, jy, jw, 16, jcol);
+  text(jx + 6, jy + 1, jbuf, jcol, FONT_SMALL);
+}
+
+static void draw_knob_popup(uint32_t now) {
+  if (now >= popup_end_ms) {
+    return;
+  }
+  int32_t anim = 256;
+  int32_t since = (int32_t)(now - popup_start_ms);
+  int32_t rem = (int32_t)(popup_end_ms - now);
+  if (since < 120) {
+    anim = ease_out_quad(since, 120);
+  } else if (rem < 120) {
+    anim = ease_out_quad(rem, 120);
+  }
+  int pw = 196, ph = 28;
+  int px = (SCREEN_W - pw) >> 1;
+  int py = (HWY_Y0 - ph) + (((ph + 8) * anim) >> 8);
+  if (py + ph <= HWY_Y0) {
+    return;
+  }
+  draw_outlined_box(px, py, pw, ph, C_SURF_ELEV, popup_col, WHITE);
+  text(px + 8, py + 3, popup_label, C_TEXT_DIM, FONT_SMALL);
+  text(px + pw - text_width(popup_val, FONT_SMALL) - 8, py + 3, popup_val, C_TEXT_PRI, FONT_SMALL);
+
+  int bx = px + 8, by = py + 20, bw = pw - 16;
+  rect(bx, by, bw, 4, C_BG_VOID);
+  int fw = (bw * popup_pct) / 100;
+  if (fw > 0) {
+    rect(bx, by, fw, 4, popup_col);
+  }
+}
+
+static void draw_song_browser(uint32_t now) {
+  if (now >= browser_until_ms || menu_open) {
+    return;
+  }
+  int32_t since = (int32_t)(now - browser_start_ms);
+  int32_t rem = (int32_t)(browser_until_ms - now);
+  int32_t anim = since < 120 ? ease_out_quad(since, 120) : (rem < 120 ? ease_out_quad(rem, 120) : 256);
+
+  int bw = 212, bh = 98;
+  int bx = (SCREEN_W - bw) >> 1;
+  int by = HWY_Y0 + 40 + (((256 - anim) * 16) >> 8);
+  draw_outlined_box(bx, by, bw, bh, C_SURF_ELEV, C_LH_EDGE, WHITE);
+  rect(bx + 1, by + 1, bw - 2, 16, C_SURF_RECESS);
+  text(bx + 6, by + 1, "SONG SELECT", C_LH_EDGE, FONT_SMALL);
+
+  char cnt_buf[12];
+  char *cp = str_cat_int(cnt_buf, saved.song_idx + 1);
+  cp = str_cat(cp, "/");
+  str_cat_int(cp, TOTAL_SONGS);
+  text(bx + bw - text_width(cnt_buf, FONT_SMALL) - 6, by + 1, cnt_buf, C_TEXT_DIM, FONT_SMALL);
+
+  for (int row = -2; row <= 2; row++) {
+    int idx = (saved.song_idx + row + TOTAL_SONGS) % TOTAL_SONGS;
+    int ry = by + 19 + (row + 2) * 15;
+    int sel = (row == 0);
+    if (sel) {
+      rect(bx + 4, ry, bw - 8, 15, C_SURF_RECESS);
+      frame(bx + 4, ry, bw - 8, 15, C_LH_EDGE);
+      rect(bx + 4, ry, 3, 15, C_RH_EDGE);
+    }
+    const char *t = (idx == CUSTOM_SLOT) ? (saved.custom_title[0] ? saved.custom_title : "CUSTOM .MID") : BUILTIN_SONGS[idx].title;
+    uint16_t bpm = (idx == CUSTOM_SLOT) ? (saved.custom_bpm ? saved.custom_bpm : 120) : BUILTIN_SONGS[idx].bpm;
+    char lbuf[24];
+    char *lp = str_cat_int(lbuf, idx + 1);
+    lp = str_cat(lp, ".");
+    str_cat(lp, t);
+    if (text_width(lbuf, FONT_SMALL) > 146) {
+      lbuf[18] = 0;
+    }
+    text(bx + 10, ry, lbuf, sel ? C_TEXT_PRI : C_TEXT_DIM, FONT_SMALL);
+    char bbuf[8];
+    format_int(bbuf, bpm);
+    text(bx + bw - text_width(bbuf, FONT_SMALL) - 8, ry, bbuf, sel ? C_GOLD : C_OUTLINE_IDLE, FONT_SMALL);
+  }
+}
+
+/* ---- GLO Modal Menu Window (with 5-Theme Selector!) */
+static void draw_glo_menu(uint32_t now) {
+  static const char *const MODE_NAMES[MODE_COUNT] = {"WAIT", "GAME", "AUTO"};
+  static const char *const HAND_NAMES[HAND_COUNT] = {"BOTH", "RH", "LH"};
+  static const char *const SHORT_PATCH[PATCH_COUNT] = {"GRAND", "E-PNO", "CHIP", "BELLS", "BRASS", "PAD"};
+
+  int32_t anim = ease_out_quad((int32_t)(now - menu_open_ms), 140);
+  int mw = 218, mh = 180;
+  int mx = (SCREEN_W - mw) >> 1;
+  int my = 4 + (((256 - anim) * 14) >> 8);
+  uint16_t acc = theme_accent_col();
+
+  draw_outlined_box(mx, my, mw, mh, C_SURF_ELEV, acc, WHITE);
+  rect(mx + 1, my + 1, mw - 2, 17, C_SURF_RECESS);
+  rect(mx + 1, my + 18, mw - 2, 1, C_OUTLINE_IDLE);
+  text(mx + 6, my + 1, "FM1-HERO MENU", acc, FONT_SMALL);
+
+  char sbuf[16];
+  str_cat_int(str_cat(sbuf, "PTS:"), (int32_t)score);
+  text(mx + mw - text_width(sbuf, FONT_SMALL) - 6, my + 1, sbuf, C_GOLD, FONT_SMALL);
+
+  static const char *const LABELS[MENU_ITEMS] = {
+    "SONG", "THEME", "MODE", "HAND", "PATCH", "TEMPO", "FM BRT", "ECHO", "METRO", "OCTAVE"
+  };
+
+  for (int i = 0; i < MENU_ITEMS; i++) {
+    int ry = my + 20 + i * 14;
+    int sel = (i == menu_cursor);
+    char val[18];
+    uint16_t vcol = C_TEXT_PRI;
+    switch (i) {
+      case 0: {
+        char *p = str_cat_int(val, saved.song_idx + 1);
+        p = str_cat(p, ".");
+        str_copy_lim(p, song_title, 12);
+        vcol = C_LH_EDGE;
+        break;
+      }
+      case 1:
+        str_copy_lim(val, THEME_SHORT[saved.theme % THEME_COUNT], sizeof val);
+        vcol = acc;
+        break;
+      case 2:
+        str_copy_lim(val, MODE_NAMES[saved.mode % MODE_COUNT], sizeof val);
+        vcol = saved.mode == MODE_GAME ? C_RH_EDGE : saved.mode == MODE_AUTO ? C_LH_EDGE : C_FM1_ORANGE;
+        break;
+      case 3:
+        str_copy_lim(val, HAND_NAMES[saved.hand % HAND_COUNT], sizeof val);
+        vcol = saved.hand == HAND_RIGHT ? C_RH_EDGE : saved.hand == HAND_LEFT ? C_LH_EDGE : C_GOLD;
+        break;
+      case 4:
+        str_copy_lim(val, SHORT_PATCH[saved.patch % PATCH_COUNT], sizeof val);
+        vcol = C_LH_EDGE;
+        break;
+      case 5:
+        str_cat(str_cat_int(val, saved.speed_pct), "%");
+        vcol = C_RH_EDGE;
+        break;
+      case 6:
+        format_int(val, saved.fm_bright);
+        vcol = C_TEXT_PRI;
+        break;
+      case 7:
+        format_int(val, saved.echo_mix);
+        vcol = C_FM1_ORANGE;
+        break;
+      case 8:
+        str_copy_lim(val, saved.metronome ? "ON" : "OFF", sizeof val);
+        vcol = saved.metronome ? C_RH_EDGE : C_TEXT_DIM;
+        break;
+      case 9: {
+        char *p = val;
+        if (saved.octave > 0) *p++ = '+';
+        format_int(p, saved.octave);
+        vcol = C_GOLD;
+        break;
+      }
+      default:
+        val[0] = 0;
+        break;
+    }
+    if (sel) {
+      rect(mx + 5, ry, mw - 10, 14, C_SURF_RECESS);
+      frame(mx + 5, ry, mw - 10, 14, acc);
+      rect(mx + 5, ry, 3, 14, C_GOLD);
+    }
+    text(mx + 11, ry, LABELS[i], sel ? C_TEXT_PRI : C_TEXT_DIM, FONT_SMALL);
+    text(mx + mw - text_width(val, FONT_SMALL) - 10, ry, val, vcol, FONT_SMALL);
+  }
+
+  rect(mx + 1, my + mh - 15, mw - 2, 14, C_SURF_RECESS);
+  const char *hint = "SEL:NAV  K1:ADJ  GLO:OK";
+  text((SCREEN_W - text_width(hint, FONT_SMALL)) / 2, my + mh - 15, hint, C_TEXT_DIM, FONT_SMALL);
+}
+
+static void adjust_menu_item(int dir) {
+  switch (menu_cursor) {
+    case 0:
+      load_song((int)saved.song_idx + (dir > 0 ? 1 : -1));
+      is_playing = 1;
+      break;
+    case 1:
+      saved.theme = (uint8_t)(((int)saved.theme + (dir > 0 ? 1 : THEME_COUNT - 1)) % THEME_COUNT);
+      break;
+    case 2:
+      saved.mode = (uint8_t)(((int)saved.mode + (dir > 0 ? 1 : MODE_COUNT - 1)) % MODE_COUNT);
+      synth_all_off();
+      last_judge = JUDGE_NONE;
+      break;
+    case 3:
+      saved.hand = (uint8_t)(((int)saved.hand + (dir > 0 ? 1 : HAND_COUNT - 1)) % HAND_COUNT);
+      synth_all_off();
+      last_judge = JUDGE_NONE;
+      break;
+    case 4:
+      saved.patch = (uint8_t)(((int)saved.patch + (dir > 0 ? 1 : PATCH_COUNT - 1)) % PATCH_COUNT);
+      v_patch = saved.patch;
+      break;
+    case 5: {
+      int sp = (int)saved.speed_pct + dir * 5;
+      saved.speed_pct = (uint8_t)(sp < 15 ? 15 : sp > 200 ? 200 : sp);
+      break;
+    }
+    case 6: {
+      int fb = (int)saved.fm_bright + dir * 4;
+      saved.fm_bright = (uint8_t)(fb < 0 ? 0 : fb > 127 ? 127 : fb);
+      v_fm_bright = saved.fm_bright;
+      break;
+    }
+    case 7: {
+      int ec = (int)saved.echo_mix + dir * 4;
+      saved.echo_mix = (uint8_t)(ec < 0 ? 0 : ec > 127 ? 127 : ec);
+      v_echo_mix = saved.echo_mix;
+      break;
+    }
+    case 8:
+      saved.metronome = !saved.metronome;
+      break;
+    case 9: {
+      int no = saved.octave + (dir > 0 ? 1 : -1);
+      if (no >= -2 && no <= 2) saved.octave = (int8_t)no;
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+static void draw_highway(uint32_t now) {
   if (is_finished) {
-    draw_finish_overlay();
+    draw_finish_overlay(now);
+    if (menu_open) draw_glo_menu(now);
     return;
   }
 
-  /* 1. Clear falling-note area to dark gray rgb(48, 48, 48) */
-  rect(0, HWY_Y0, SCREEN_W, HWY_H, C_SYN_BG);
-
-  /* 2. Draw vertical octave guide lines before every C (brighter) and F (subtle) */
-  for (int k = 0; k < KEY_COUNT; k++) {
-    int semi = k % 12;
-    if (semi == 7) { /* C key */
-      rect(key_x[k] - 1, HWY_Y0, 1, HWY_H, C_SYN_GUIDE_C);
-    } else if (semi == 0) { /* F key */
-      rect(key_x[k] - 1, HWY_Y0, 1, HWY_H, C_SYN_GUIDE_F);
-    }
+  /* 1. Themed Background */
+  switch (saved.theme % THEME_COUNT) {
+    case THEME_SPACE:    draw_bg_space(now); break;
+    case THEME_CARTOON:  draw_bg_cartoon(now); break;
+    case THEME_CYBER:    draw_bg_cyber(); break;
+    case THEME_MEDIEVAL: draw_bg_medieval(now); break;
+    case THEME_ARCADE:   draw_bg_arcade(); break;
+    case THEME_TIEDYE:   draw_bg_tiedye(now); break;
+    case THEME_LAVA:     draw_bg_lava(now); break;
+    case THEME_FLOWER:   draw_bg_flower(); break;
+    case THEME_MANDALA:  draw_bg_mandala(now); break;
+    case THEME_GROOVY:   draw_bg_groovy(); break;
+    default:             draw_bg_space(now); break;
   }
 
-  /* 3. Draw horizontal Measure lines (every 4 beats = 96 ticks) with measure numbers */
-  int32_t bar_ms = ticks_to_ms(96, song_base_bpm);
-  if (bar_ms > 150) {
-    int32_t m_idx = song_pos_ms > 0 ? (song_pos_ms / bar_ms) : 0;
-    for (; m_idx * bar_ms < song_pos_ms + LOOKAHEAD_MS; m_idx++) {
-      int32_t mt = m_idx * bar_ms;
-      int32_t dt = mt - song_pos_ms;
-      if (dt >= 0 && dt < LOOKAHEAD_MS) {
-        int y = HWY_Y1 - (int)((dt * HWY_H) / LOOKAHEAD_MS);
-        if (y >= HWY_Y0 && y < HWY_Y1) {
-          rect(8, y, 224, 1, C_SYN_MEASURE);
-          if (y >= HWY_Y0 + 14) {
-            char mnum[12];
-            format_int(mnum, m_idx + 1);
-            text(9, y - 14, mnum, C_DIM, FONT_SMALL);
-          }
-        }
+  /* 2. A-B Loop edge glow markers when active */
+  if (loop_state >= 1) {
+    rect(0, HWY_Y0, 2, HWY_H, C_FM1_ORANGE);
+    rect(SCREEN_W - 2, HWY_Y0, 2, HWY_H, C_FM1_ORANGE);
+  }
+
+  /* 3. Themed Falling Notes */
+  int32_t win_end = song_pos_ms + LOOKAHEAD_MS;
+  for (int32_t i = 0; i < song_note_count; i++) {
+    const active_note_t *n = &song_notes[i];
+    if (n->t1_ms < song_pos_ms) continue;
+    if (n->t0_ms > win_end) break;
+
+    int32_t dt0 = n->t0_ms - song_pos_ms;
+    int32_t dt1 = n->t1_ms - song_pos_ms;
+    if (dt0 < 0) dt0 = 0;
+    if (dt1 > LOOKAHEAD_MS) dt1 = LOOKAHEAD_MS;
+
+    int y_bot = HWY_Y1 - (int)((dt0 * HWY_H) / LOOKAHEAD_MS);
+    int y_top = HWY_Y1 - (int)((dt1 * HWY_H) / LOOKAHEAD_MS);
+    if (y_bot - y_top < 8) y_top = y_bot - 8;
+    if (y_top < HWY_Y0) y_top = HWY_Y0;
+    if (y_bot > HWY_Y1) y_bot = HWY_Y1;
+    int h = y_bot - y_top;
+    if (h <= 0) continue;
+
+    uint8_t k = n->key;
+    int x = key_x[k] + 1;
+    int w = key_w[k] - 2;
+    draw_themed_note(x, y_top, w, h, (n->flags & NF_LH) != 0, key_black[k], n->flags, now);
+  }
+
+  /* 4. Themed Strike-Line Impact Bursts */
+  draw_themed_impacts(now);
+
+  /* 5. Rising Particle / Spark Fountain */
+  for (int i = 0; i < SPARK_MAX; i++) {
+    if (sparks[i].life) {
+      int sx = sparks[i].x8 >> 8;
+      int sy = sparks[i].y8 >> 8;
+      if (sx >= 1 && sx < SCREEN_W - 2 && sy >= HWY_Y0 + 1 && sy < HWY_Y1 - 1) {
+        int hot_phase = sparks[i].life * 2 > sparks[i].max_life;
+        uint16_t col = hot_phase ? sparks[i].col_hot : sparks[i].col_mid;
+        int sz = (sparks[i].life > 5) ? 2 : 1;
+        rect(sx, sy, sz, sz, col);
       }
     }
   }
 
-  /* 4. Draw Falling Note Bars (Green = Right Hand, Blue = Left Hand) */
-  int32_t win_end = song_pos_ms + LOOKAHEAD_MS;
-  for (int32_t i = 0; i < song_note_count; i++) {
-    const active_note_t *n = &song_notes[i];
-    if (n->t1_ms < song_pos_ms) {
-      continue;
+  /* 6. Minimal status pill ONLY when paused / recording / waiting */
+  if (!menu_open) {
+    if (is_recording) {
+      char rbuf[16];
+      str_cat_int(str_cat(rbuf, "REC "), custom_count);
+      int rw = text_width(rbuf, FONT_SMALL) + 10;
+      rect(SCREEN_W - rw - 4, 6, rw, 15, C_MISS_CORE);
+      frame(SCREEN_W - rw - 4, 6, rw, 15, C_CRIMSON);
+      text(SCREEN_W - rw + 1, 6, rbuf, WHITE, FONT_SMALL);
+    } else if (!is_playing && !is_finished) {
+      int pw = text_width("PAUSED", FONT_SMALL) + 12;
+      int px = (SCREEN_W - pw) >> 1;
+      rect(px, 8, pw, 16, C_SURF_RECESS);
+      frame(px, 8, pw, 16, C_FM1_ORANGE);
+      text(px + 6, 9, "PAUSED", C_FM1_ORANGE, FONT_SMALL);
+    } else if (last_judge == JUDGE_WAIT) {
+      int pw = text_width("PLAY LIT KEY", FONT_SMALL) + 12;
+      int px = (SCREEN_W - pw) >> 1;
+      rect(px, 8, pw, 16, C_SURF_RECESS);
+      frame(px, 8, pw, 16, C_GOLD);
+      text(px + 6, 9, "PLAY LIT KEY", C_GOLD, FONT_SMALL);
     }
-    if (n->t0_ms > win_end) {
-      break;
-    }
-    int32_t dt0 = n->t0_ms - song_pos_ms;
-    int32_t dt1 = n->t1_ms - song_pos_ms;
-    if (dt0 < 0) {
-      dt0 = 0;
-    }
-    if (dt1 > LOOKAHEAD_MS) {
-      dt1 = LOOKAHEAD_MS;
-    }
-    int y_bot = HWY_Y1 - (int)((dt0 * HWY_H) / LOOKAHEAD_MS);
-    int y_top = HWY_Y1 - (int)((dt1 * HWY_H) / LOOKAHEAD_MS);
-    if (y_bot - y_top < 5) {
-      y_top = y_bot - 5;
-    }
-    if (y_top < HWY_Y0) {
-      y_top = HWY_Y0;
-    }
-    if (y_bot > HWY_Y1) {
-      y_bot = HWY_Y1;
-    }
-    int h = y_bot - y_top;
-    if (h <= 0) {
-      continue;
-    }
+  }
 
-    uint8_t k = n->key;
-    int blk = key_black[k];
-    int is_lh = (n->flags & NF_LH) != 0;
-    int x = key_x[k] + 1;
-    int w = key_w[k] - 2;
-    uint16_t body_col, hi_col;
-
-    if (n->flags & NF_MISSED) {
-      body_col = C_MISS_BAR;
-      hi_col = RGB(180, 80, 80);
-    } else if (last_judge == JUDGE_WAIT && n->t0_ms <= song_pos_ms + 25 && !(n->flags & NF_DONE) && note_is_player_hand(n->flags)) {
-      body_col = C_WAIT_PULSE;
-      hi_col = WHITE;
-    } else if (is_lh) {
-      body_col = blk ? C_LH_BLACK : C_LH_WHITE;
-      hi_col   = (n->flags & NF_HIT) ? WHITE : (blk ? C_LH_BLACK_HI : C_LH_WHITE_HI);
-    } else {
-      body_col = blk ? C_RH_BLACK : C_RH_WHITE;
-      hi_col   = (n->flags & NF_HIT) ? WHITE : (blk ? C_RH_BLACK_HI : C_RH_WHITE_HI);
-    }
-
-    /* Rounded-look note bar with 3D left/bottom bevel */
-    rect(x, y_top, w, h, body_col);
-    rect(x, y_bot - 2, w, 2, hi_col);
-    if (h >= 5) {
-      rect(x, y_top, 1, h, hi_col);
-    }
+  /* 7. Transient Overlays or GLO Menu Window */
+  if (menu_open) {
+    draw_glo_menu(now);
+  } else {
+    draw_floating_judge(now);
+    draw_song_browser(now);
+    draw_knob_popup(now);
   }
 }
 
@@ -817,6 +1814,11 @@ static void on_player_key_press(int k, int velocity) {
   int midi_note = KEY_FIRST_NOTE + 12 * saved.octave + k;
   synth_note_on(midi_note, velocity, 0);
   midi_send(0x90, (uint8_t)midi_note, (uint8_t)velocity);
+  if (k >= 0 && k < KEY_COUNT) {
+    lane_flash_ms[k] = 150u;
+    lane_flash_lh[k] = (uint8_t)(midi_note < 60 ? 1 : 0);
+    spawn_sparks(k, lane_flash_lh[k], 3, 0);
+  }
 
   if (is_recording && custom_count < MAX_CUSTOM_NOTES) {
     uint32_t now = millis();
@@ -878,7 +1880,13 @@ static void on_player_key_press(int k, int velocity) {
         hits_good++;
         score += 50u * mult;
       }
-      judge_until_ms = millis() + 700u;
+      uint32_t hit_now = millis();
+      judge_start_ms = hit_now;
+      judge_until_ms = hit_now + 650u;
+      if (combo >= 10) {
+        combo_pop_until_ms = hit_now + 180u;
+      }
+      trigger_hit_fx(k, (n->flags & NF_LH) != 0, last_judge);
       hud_dirty = 1;
       break;
     }
@@ -983,6 +1991,7 @@ void setup(void) {
     saved.speed_pct = 100;
     saved.fm_bright = 68;
     saved.echo_mix = 32;
+    saved.theme = THEME_SPACE;
     init_default_custom_song();
   } else {
     custom_count = saved.custom_count > FLASH_CUSTOM_NOTES ? FLASH_CUSTOM_NOTES : saved.custom_count;
@@ -990,14 +1999,15 @@ void setup(void) {
       custom_events[i] = saved.custom_events[i];
     }
   }
-  if (saved.speed_pct < 25 || saved.speed_pct > 200) {
+  if (saved.speed_pct < 15 || saved.speed_pct > 200) {
     saved.speed_pct = 100;
   }
   v_patch = saved.patch %= PATCH_COUNT;
+  saved.theme %= THEME_COUNT;
   v_fm_bright = saved.fm_bright;
   v_echo_mix = saved.echo_mix;
 
-  clear(C_SYN_BG);
+  clear(C_BG_VOID);
   load_song(saved.song_idx);
   is_playing = 1;
   last_frame_ms = millis();
@@ -1065,6 +2075,7 @@ void loop(void) {
         synth_all_off();
       }
     }
+    browser_until_ms = 0;
     hud_dirty = 1;
   }
   if (button_pressed(BTN_HOME)) {
@@ -1097,12 +2108,21 @@ void loop(void) {
     bot_dirty = 1;
   }
   if (button_pressed(BTN_GLO)) {
-    saved.metronome = !saved.metronome;
-    bot_dirty = 1;
+    menu_open = !menu_open;
+    if (menu_open) {
+      menu_open_ms = now;
+      browser_until_ms = 0;
+      popup_end_ms = 0;
+    }
+  }
+  if (button_pressed(BTN_SEQ)) {
+    saved.theme = (uint8_t)((saved.theme + 1) % THEME_COUNT);
+    trigger_popup("THEME", THEME_SHORT[saved.theme], (uint8_t)(((saved.theme + 1) * 100) / THEME_COUNT), theme_accent_col());
   }
   if (button_pressed(BTN_FX)) {
     saved.patch = (uint8_t)((saved.patch + 1) % PATCH_COUNT);
     v_patch = saved.patch;
+    trigger_popup("PATCH", PATCHES[saved.patch].name, (uint8_t)(((saved.patch + 1) * 100) / PATCH_COUNT), C_LH_EDGE);
     bot_dirty = 1;
   }
   if (button_pressed(BTN_REC)) {
@@ -1139,13 +2159,38 @@ void loop(void) {
     int no = saved.octave + oct_d;
     if (no >= -2 && no <= 2) {
       saved.octave = (int8_t)no;
+      char obuf[8];
+      char *op = obuf;
+      if (saved.octave > 0) {
+        *op++ = '+';
+      }
+      format_int(op, saved.octave);
+      trigger_popup("OCTAVE", obuf, (uint8_t)(((saved.octave + 2) * 100) / 4), C_FM1_ORANGE);
     }
   }
 
-  int32_t song_step = encoder(ENC_SELECT) + encoder(ENC_PRESETS);
+  int32_t song_step = encoder(ENC_SELECT);
   if (song_step) {
-    load_song((int)saved.song_idx + (song_step > 0 ? 1 : -1));
-    is_playing = 1;
+    if (menu_open) {
+      menu_cursor = (uint8_t)(((int)menu_cursor + (song_step > 0 ? 1 : MENU_ITEMS - 1)) % MENU_ITEMS);
+    } else {
+      load_song((int)saved.song_idx + (song_step > 0 ? 1 : -1));
+      is_playing = 1;
+      if (now >= browser_until_ms) {
+        browser_start_ms = now;
+      } else if (now > browser_start_ms + 120u) {
+        browser_start_ms = now - 120u;
+      }
+      browser_until_ms = now + 1500u;
+    }
+  }
+
+  int32_t theme_step = encoder(ENC_PRESETS);
+  if (theme_step) {
+    saved.theme = (uint8_t)(((int)saved.theme + (theme_step > 0 ? 1 : THEME_COUNT - 1)) % THEME_COUNT);
+    if (!menu_open) {
+      trigger_popup("THEME", THEME_SHORT[saved.theme], (uint8_t)(((saved.theme + 1) * 100) / THEME_COUNT), theme_accent_col());
+    }
   }
 
   int32_t alg_step = encoder(ENC_ALGORITHM);
@@ -1158,14 +2203,21 @@ void loop(void) {
 
   int32_t d_k1 = accel(ENC_KNOB1, encoder(ENC_KNOB1));
   if (d_k1) {
-    int sp = (int)saved.speed_pct + d_k1 * 5;
-    saved.speed_pct = (uint8_t)(sp < 25 ? 25 : sp > 200 ? 200 : sp);
-    bot_dirty = 1;
+    if (menu_open) {
+      adjust_menu_item(d_k1 > 0 ? 1 : -1);
+    } else {
+      int sp = (int)saved.speed_pct + d_k1 * 5;
+      saved.speed_pct = (uint8_t)(sp < 15 ? 15 : sp > 200 ? 200 : sp);
+      char vbuf[10];
+      str_cat(str_cat_int(vbuf, saved.speed_pct), "%");
+      trigger_popup("TEMPO", vbuf, (uint8_t)(((saved.speed_pct - 15) * 100) / 185), C_RH_EDGE);
+    }
   }
   int32_t d_k2 = encoder(ENC_KNOB2);
   if (d_k2) {
     saved.patch = (uint8_t)(((int)saved.patch + (d_k2 > 0 ? 1 : PATCH_COUNT - 1)) % PATCH_COUNT);
     v_patch = saved.patch;
+    trigger_popup("PATCH", PATCHES[saved.patch].name, (uint8_t)(((saved.patch + 1) * 100) / PATCH_COUNT), C_LH_EDGE);
     bot_dirty = 1;
   }
   int32_t d_k3 = accel(ENC_KNOB3, encoder(ENC_KNOB3));
@@ -1173,6 +2225,9 @@ void loop(void) {
     int fb = (int)saved.fm_bright + d_k3;
     saved.fm_bright = (uint8_t)(fb < 0 ? 0 : fb > 127 ? 127 : fb);
     v_fm_bright = saved.fm_bright;
+    char vbuf[10];
+    format_int(vbuf, saved.fm_bright);
+    trigger_popup("FM BRIGHT", vbuf, (uint8_t)((saved.fm_bright * 100) / 127), C_TEXT_PRI);
     bot_dirty = 1;
   }
   int32_t d_k4 = accel(ENC_KNOB4, encoder(ENC_KNOB4));
@@ -1180,6 +2235,9 @@ void loop(void) {
     int ec = (int)saved.echo_mix + d_k4;
     saved.echo_mix = (uint8_t)(ec < 0 ? 0 : ec > 127 ? 127 : ec);
     v_echo_mix = saved.echo_mix;
+    char vbuf[10];
+    format_int(vbuf, saved.echo_mix);
+    trigger_popup("ECHO MIX", vbuf, (uint8_t)((saved.echo_mix * 100) / 127), C_FM1_ORANGE);
     bot_dirty = 1;
   }
 
@@ -1188,10 +2246,9 @@ void loop(void) {
   int32_t beat_ms = ticks_to_ms(24, song_base_bpm);
 
   if (is_playing && !is_finished && !is_recording) {
-    int32_t step_ms = (int32_t)((dt_real * saved.speed_pct) / 100u);
-    if (step_ms < 1 && dt_real > 0) {
-      step_ms = 1;
-    }
+    song_frac_acc += dt_real * (uint32_t)saved.speed_pct;
+    int32_t step_ms = (int32_t)(song_frac_acc / 100u);
+    song_frac_acc %= 100u;
 
     int blocked_by_wait = 0;
     for (int32_t i = 0; i < song_note_count; i++) {
@@ -1240,7 +2297,12 @@ void loop(void) {
             hits_perfect++;
             score += 100u;
             last_judge = JUDGE_PERFECT;
-            judge_until_ms = now + 500u;
+            judge_start_ms = now;
+            judge_until_ms = now + 550u;
+            if (combo >= 10) {
+              combo_pop_until_ms = now + 180u;
+            }
+            trigger_hit_fx(n->key, (n->flags & NF_LH) != 0, JUDGE_PERFECT);
             hud_dirty = 1;
           } else {
             song_pos_ms = n->t0_ms;
@@ -1262,6 +2324,7 @@ void loop(void) {
           combo = 0;
           hits_missed++;
           last_judge = JUDGE_MISS;
+          judge_start_ms = now;
           judge_until_ms = now + 600u;
           hud_dirty = 1;
         }
@@ -1294,6 +2357,7 @@ void loop(void) {
       } else if (song_pos_ms >= song_total_ms) {
         is_finished = 1;
         is_playing = 0;
+        finish_start_ms = now;
         synth_all_off();
         if (score > saved.high_score[saved.song_idx]) {
           saved.high_score[saved.song_idx] = score;
@@ -1318,9 +2382,10 @@ void loop(void) {
   led_button(BTN_ENV, saved.hand == HAND_RIGHT);
   led_button(BTN_LFO, saved.hand == HAND_LEFT);
   led_button(BTN_EDIT, loop_state > 0);
-  led_button(BTN_GLO, saved.metronome);
+  led_button(BTN_GLO, menu_open);
 
   /* 6. Render Screen at ~30 FPS */
+  cur_held_mask = held_mask;
   if (held_mask != prev_held || rh_cue != prev_rh || lh_cue != prev_lh) {
     kb_dirty = 1;
     prev_held = held_mask;
@@ -1328,21 +2393,18 @@ void loop(void) {
     prev_lh = lh_cue;
   }
   if (now - last_frame_ms >= 33u) {
+    uint32_t frame_dt = now - last_frame_ms;
+    if (frame_dt > 60u) {
+      frame_dt = 60u;
+    }
     last_frame_ms = now;
-    if (hud_dirty) {
-      draw_hud();
-      hud_dirty = 0;
-    } else if (is_playing) {
-      draw_timeline();
-    }
-    draw_highway();
-    if (kb_dirty) {
-      draw_keyboard(held_mask, rh_cue, lh_cue);
-      kb_dirty = 0;
-    }
-    if (bot_dirty) {
-      draw_bottom_bar();
-      bot_dirty = 0;
-    }
+    update_fx(frame_dt);
+
+    draw_timeline();
+    draw_highway(now);
+    draw_keyboard(held_mask, rh_cue, lh_cue);
+    hud_dirty = 0;
+    kb_dirty = 0;
+    bot_dirty = 0;
   }
 }

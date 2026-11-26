@@ -9,6 +9,7 @@ const DEV = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)
 // ---------------------------------------------------------------- tabs
 function showTab() {
   const tab = (location.hash || '#emulator').slice(1)
+  document.body.dataset.tab = tab
   for (const s of document.querySelectorAll('.tab')) s.hidden = s.id !== 'tab-' + tab
   for (const a of document.querySelectorAll('nav a')) a.classList.toggle('on', a.dataset.tab === tab)
 }
@@ -760,8 +761,21 @@ $('midfile')?.addEventListener('change', (e) => {
   if (f) uploadMidFile(f)
   e.target.value = ''
 })
+let dragDepth = 0
+const dropzone = $('dropzone')
+addEventListener('dragenter', (e) => {
+  if (!e.dataTransfer?.types?.includes('Files')) return
+  dragDepth++
+  if (dropzone) dropzone.hidden = false
+})
+addEventListener('dragleave', () => {
+  dragDepth = Math.max(0, dragDepth - 1)
+  if (dragDepth === 0 && dropzone) dropzone.hidden = true
+})
 addEventListener('dragover', (e) => e.preventDefault())
 addEventListener('drop', (e) => {
+  dragDepth = 0
+  if (dropzone) dropzone.hidden = true
   const f = e.dataTransfer?.files?.[0]
   if (f && /\.(mid|midi)$/i.test(f.name)) {
     e.preventDefault()

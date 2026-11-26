@@ -28,6 +28,20 @@ Play along with falling **Green (Right Hand)** and **Blue (Left Hand)** note bar
 
 > **Prefer the command line?** Run `./fm1 build && ./fm1 flash` (see [Build & Develop](#build--develop)), or try the **[Browser Emulator](https://mlwilki.github.io/FM1-Hero/#emulator)** first — no hardware required.
 
+## 10 Visual Waterfall Themes & `GLO` Menu
+
+Switch live between **10 procedural full-screen waterfall themes** using the **`PRESETS`** knob (or **`SEQ`** button), and open the clean modal **FM1-Hero Menu** anytime with **`GLO`**:
+
+![FM1-Hero 10 Visual Waterfall Themes](docs/themes-panel.png)
+
+*Top row: **1. Outer Space** · **2. Cartoon** · **3. Cyberpunk / Neon** · **4. Medieval / Fantasy** · **5. Retro / Arcade***  
+*Bottom row: **6. Tie-Dye / Blacklight** · **7. Lava Lamp** · **8. Flower Power** · **9. Cosmic Mandala** · **10. 70s Groovy***
+
+<details>
+<summary><strong>Preview: GLO Modal Menu Window</strong></summary>
+<p align="center"><img src="docs/menu-glo.png" alt="FM1-Hero GLO Menu Window" width="240" /></p>
+</details>
+
 ## Features
 
 - **3 Practice & Game Modes** (`ALGORITHM` encoder or `SEL` / `ARP` buttons):
@@ -54,13 +68,14 @@ Play along with falling **Green (Right Hand)** and **Blue (Left Hand)** note bar
 | **Key LEDs** | Light up the physical keys you need to press next |
 | **PLAY** | Play / Pause song (or retry from the Recital Complete screen) |
 | **HOME** | Rewind song to Measure 1 |
-| **SELECT / PRESETS** | Browse 16 built-in songs + Slot 17 (Custom `.MID` / User Recording) |
+| **SELECT** | Browse 16 built-in songs + Slot 17 (Custom `.MID` / User Recording) |
+| **PRESETS / SEQ** | Switch between all 10 Visual Waterfall Themes (`SPACE`, `CARTOON`, `CYBER`, `FANTASY`, `ARCADE`, `TIEDYE`, `LAVA`, `FLOWER`, `MANDALA`, `70S`) |
 | **ALGORITHM / SEL** | Cycle Mode: `WAIT` (Wait-for-Me), `GAME` (Rhythm), `AUTO` (Watch) |
 | **ENV / LFO** | Cycle Hand Practice: `BOTH`, `RH` (Right Hand), `LH` (Left Hand) |
 | **EDIT** | A–B Loop Bookmark (1st press = set A, 2nd = loop A–B, 3rd = clear) |
-| **GLO** | Toggle Metronome beat click (`MET:ON`) |
+| **GLO** | Open / Close **FM1-Hero Menu** window (Song, Mode, Hand, Patch, Tempo, FM, Echo, Metronome, Octave) |
 | **FX / KNOB 2** | Cycle 6 FM Synth Patches (`GRND`, `EPNO`, `CHIP`, `BELL`, `BRAS`, `PAD`) |
-| **KNOB 1** | Song Tempo / Speed (`25%` – `200%`) |
+| **KNOB 1** | Song Tempo / Speed (`15%` – `200%`) |
 | **KNOB 3** | FM Brightness / Timbre (`0` – `127`) |
 | **KNOB 4** | Stereo Echo FX Mix (`0` – `127`) |
 | **OCT- / OCT+** | Transpose keyboard octave (`-2` to `+2`) |
