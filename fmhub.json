@@ -1,9 +1,10 @@
 {
-  "what": "Falling-note MIDI piano trainer, rhythm game, and 6-voice 2-op FM synthesizer. Features Wait-for-Me melody practice, rhythm scoring with combos, separate Left and Right Hand modes, A-B section looping, key LED guidance, live recording, 16 built-in songs, and custom .mid upload.",
+  "what": "Falling-note MIDI piano trainer, rhythm game, and 6-voice 2-op FM synthesizer. Features Wait-for-Me melody practice, rhythm scoring with combos, separate Left and Right Hand modes, A-B section looping, key LED guidance, live recording, 16 built-in songs, and custom MIDI upload.",
   "author": "mlwilki",
-  "kinds": ["other", "synth"],
-  "play": "https://mlwilki.github.io/FM1-Hero/",
+  "kinds": ["other"],
+  "play": "https://mlwilki.github.io/FM1-Hero/#emulator",
+  "video": "https://youtu.be/b8FXGEUaa0k",
   "image": "docs/card.png",
-  "color": "#6EE42A"
+  "color": "#6EE42A",
+  "sounds": "none"
 }
-

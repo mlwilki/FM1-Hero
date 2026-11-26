@@ -1,6 +1,6 @@
 {
-  "name": "FM1-HERO XMAS",
-  "version": "0.2-xmas",
+  "name": "FM1-HERO",
+  "version": "0.1",
   "identity": "FM-1_28",
   "options": {
     "usb_audio": true,

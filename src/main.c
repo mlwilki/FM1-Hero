@@ -1001,7 +1001,7 @@ void setup(void) {
   load_song(saved.song_idx);
   is_playing = 1;
   last_frame_ms = millis();
-  print("FM1-Hero Xmas Ready! 7 full-length Xmas songs + full-length .MID upload.");
+  print("FM1-Hero Ready! 16 built-in songs + 163-song web library.");
 }
 
 void loop(void) {
