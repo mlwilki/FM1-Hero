@@ -8,7 +8,7 @@
 
 [![Install on FM-1](https://img.shields.io/badge/Install_on_FM--1-Web_Installer-6EE42A?style=for-the-badge&logo=googlechrome&logoColor=18181a)](https://mlwilki.github.io/FM1-Hero/#install)
 [![Try Emulator](https://img.shields.io/badge/Try_in_Browser-Live_Emulator-E8851C?style=for-the-badge&logo=webassembly&logoColor=18181a)](https://mlwilki.github.io/FM1-Hero/#emulator)
-[![Watch Demo](https://img.shields.io/badge/Watch_Demo-YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/N7tNz_kmL0c)
+[![Watch Demo](https://img.shields.io/badge/Watch_Demo-YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/yYpGUNg_7zo)
 [![Rescue Tool](https://img.shields.io/badge/FM--1_Rescue-Restore_Stock-3A3D42?style=for-the-badge)](https://mlwilki.github.io/FM1-Hero/#rescue)
 
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
@@ -24,12 +24,12 @@ Play along with falling **Right Hand** and **Left Hand** notes across an edge-to
 ## 60-Second Demo Video
 
 <div align="center">
-  <a href="https://youtu.be/N7tNz_kmL0c">
+  <a href="https://youtu.be/yYpGUNg_7zo">
     <img src="docs/video-thumb.png" alt="Watch FM1-Hero 60-Second Demo on YouTube" width="720" />
   </a>
   <p>
-    <a href="https://youtu.be/N7tNz_kmL0c"><strong>▶ Watch on YouTube</strong></a> ·
-    <a href="docs/demo.mp4">Download MP4 (4.1 MB)</a>
+    <a href="https://youtu.be/yYpGUNg_7zo"><strong>▶ Watch on YouTube</strong></a> ·
+    <a href="docs/demo.mp4">Download MP4 (5.8 MB)</a>
   </p>
 </div>
 
